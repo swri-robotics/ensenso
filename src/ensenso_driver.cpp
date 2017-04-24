@@ -418,7 +418,12 @@ class EnsensoDriver
       if (disparity_pub_.getNumSubscribers() > 0)
       {
         ros::Time now = ros::Time::now();
-        disparity_pub_.publish(toImageMsg(*disparity, now));
+        sensor_msgs::ImagePtr image;
+        stereo_msgs::DisparityImage disparity_msg;
+        image = toImageMsg(*disparity, now);
+        disparity_msg.header = image->header;
+        disparity_msg.image = *image;
+        disparity_pub_.publish(disparity_msg);
       }
     }
     
