@@ -294,10 +294,12 @@ class EnsensoDriver
               const boost::shared_ptr<PointCloudXYZ>&,
               const boost::shared_ptr<PairOfImages>&,
               const boost::shared_ptr<PairOfImages>&,
-              const boost::shared_ptr<pcl::PCLImage> &)> f = boost::bind(
+              const boost::shared_ptr<pcl::PCLImage> &,
+              const int &,
+              const int &)> f = boost::bind(
                 &EnsensoDriver::grabberCallbackCloudImagesDisparity,
                 this,
-                _1, _2, _3, _4);
+                _1, _2, _3, _4, _5, _6);
         connection_ = ensenso_ptr_->registerCallback(f);
       }
       if (cloud && images)
@@ -315,10 +317,12 @@ class EnsensoDriver
       {
         boost::function<void(
           const boost::shared_ptr<PointCloudXYZ>&,
-          const boost::shared_ptr<pcl::PCLImage>&)> f = boost::bind (
+          const boost::shared_ptr<pcl::PCLImage>&,
+          const int &,
+          const int &)> f = boost::bind (
               &EnsensoDriver::grabberCallbackCloudDisparity,
               this,
-              _1, _2);
+              _1, _2, _3, _4);
         connection_ = ensenso_ptr_->registerCallback(f);
       }
       else if (images && disparity)
@@ -326,10 +330,12 @@ class EnsensoDriver
         boost::function<void(
           const boost::shared_ptr<PairOfImages>&,
           const boost::shared_ptr<PairOfImages>&,
-          const boost::shared_ptr<pcl::PCLImage>&)> f = boost::bind(
+          const boost::shared_ptr<pcl::PCLImage>&,
+          const int &,
+          const int &)> f = boost::bind(
               &EnsensoDriver::grabberCallbackImagesDisparity,
               this,
-              _1, _2, _3);
+              _1, _2, _3, _4, _5);
         connection_ = ensenso_ptr_->registerCallback(f);
       }
       else if (images)
@@ -354,10 +360,12 @@ class EnsensoDriver
       else if (disparity)
       {
         boost::function<void(
-          const boost::shared_ptr<pcl::PCLImage>&)> f = boost::bind(
+          const boost::shared_ptr<pcl::PCLImage>&,
+          const int &,
+          const int &)> f = boost::bind(
               &EnsensoDriver::grabberCallbackDisparity,
               this,
-              _1);
+              _1, _2, _3);
         connection_ = ensenso_ptr_->registerCallback(f);
       }
       if (was_running)
@@ -413,13 +421,17 @@ class EnsensoDriver
       return true;
     }
 
-    void grabberCallbackDisparity( const boost::shared_ptr<pcl::PCLImage>& disparity)
+    void grabberCallbackDisparity( const boost::shared_ptr<pcl::PCLImage>& disparity,
+                                   const int& min_disparity,
+                                   const int& max_disparity)
     {
       if (disparity_pub_.getNumSubscribers() > 0)
       {
         ros::Time now = ros::Time::now();
         sensor_msgs::ImagePtr image;
         stereo_msgs::DisparityImage disparity_msg;
+        disparity_msg.min_disparity = min_disparity;
+        disparity_msg.max_disparity = max_disparity;
         image = toImageMsg(*disparity, now);
         disparity_msg.header = image->header;
         disparity_msg.image = *image;
@@ -474,17 +486,21 @@ class EnsensoDriver
     
     void grabberCallbackImagesDisparity( const boost::shared_ptr<PairOfImages>& rawimages,
                           const boost::shared_ptr<PairOfImages>& rectifiedimages,
-                          const boost::shared_ptr<pcl::PCLImage>& disparity)
+                          const boost::shared_ptr<pcl::PCLImage>& disparity,
+                          const int& min_disparity,
+                          const int& max_disparity)
     {
       grabberCallbackImages(rawimages, rectifiedimages);
-      grabberCallbackDisparity(disparity);
+      grabberCallbackDisparity(disparity, min_disparity, max_disparity);
     }
 
     void grabberCallbackCloudDisparity( const boost::shared_ptr<PointCloudXYZ>& cloud,
-                          const boost::shared_ptr<pcl::PCLImage>& disparity)
+                          const boost::shared_ptr<pcl::PCLImage>& disparity,
+                          const int& min_disparity,
+                          const int& max_disparity)
     {
       grabberCallbackCloud(cloud);
-      grabberCallbackDisparity(disparity);
+      grabberCallbackDisparity(disparity, min_disparity, max_disparity);
     }
 
     void grabberCallbackCloudImages( const boost::shared_ptr<PointCloudXYZ>& cloud,
@@ -535,11 +551,13 @@ class EnsensoDriver
     void grabberCallbackCloudImagesDisparity( const boost::shared_ptr<PointCloudXYZ>& cloud,
                           const boost::shared_ptr<PairOfImages>& rawimages,
                           const boost::shared_ptr<PairOfImages>& rectifiedimages,
-                          const boost::shared_ptr<pcl::PCLImage>& disparity)
+                          const boost::shared_ptr<pcl::PCLImage>& disparity,
+                          const int& min_disparity,
+                          const int& max_disparity)
     {
       grabberCallbackCloud(cloud);
       grabberCallbackImages(rawimages, rectifiedimages);
-      grabberCallbackDisparity(disparity);
+      grabberCallbackDisparity(disparity, min_disparity, max_disparity);
     }
 
     void publishCalibrationPattern(const ros::Time &now)

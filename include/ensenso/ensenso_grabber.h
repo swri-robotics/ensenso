@@ -43,24 +43,33 @@ public:
     (sig_cb_ensenso_images)(const boost::shared_ptr<PairOfImages> &,const boost::shared_ptr<PairOfImages> &);
 
     typedef void
-    (sig_cb_ensenso_disparity)(const pcl::PCLImage::Ptr &);
+    (sig_cb_ensenso_disparity)(const pcl::PCLImage::Ptr &, const int &, const int &);
     
     typedef void
     (sig_cb_ensenso_point_cloud_images)(const pcl::PointCloud<pcl::PointXYZ>::Ptr &,
-                                        const boost::shared_ptr<PairOfImages> &,const boost::shared_ptr<PairOfImages> &);
+                                        const boost::shared_ptr<PairOfImages> &,
+                                        const boost::shared_ptr<PairOfImages> &);
 
     typedef void
     (sig_cb_ensenso_point_cloud_disparity)(const pcl::PointCloud<pcl::PointXYZ>::Ptr &,
-                                           const pcl::PCLImage::Ptr &);
+                                           const pcl::PCLImage::Ptr &,
+                                           const int &,
+                                           const int &);
 
     typedef void
-    (sig_cb_ensenso_images_disparity)(const boost::shared_ptr<PairOfImages> &, const boost::shared_ptr<PairOfImages> &,
-                                      const pcl::PCLImage::Ptr &);
+    (sig_cb_ensenso_images_disparity)(const boost::shared_ptr<PairOfImages> &,
+                                      const boost::shared_ptr<PairOfImages> &,
+                                      const pcl::PCLImage::Ptr &,
+                                      const int &,
+                                      const int &);
 
     typedef void
     (sig_cb_ensenso_point_cloud_images_disparity)(const pcl::PointCloud<pcl::PointXYZ>::Ptr &,
-                                                  const boost::shared_ptr<PairOfImages> &, const boost::shared_ptr<PairOfImages> &,
-                                                  const pcl::PCLImage::Ptr &);
+                                                  const boost::shared_ptr<PairOfImages> &,
+                                                  const boost::shared_ptr<PairOfImages> &,
+                                                  const pcl::PCLImage::Ptr &,
+                                                  const int &,
+                                                  const int &);
     /** @endcond */
     
     /** @brief Constructor */

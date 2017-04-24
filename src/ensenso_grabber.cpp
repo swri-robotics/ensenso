@@ -577,6 +577,8 @@ bool pcl::EnsensoGrabber::openTcpPort (const int port)
 void pcl::EnsensoGrabber::processGrabbing ()
 {
   bool continue_grabbing = running_;
+  int min_disparity;
+  int max_disparity;
   while (continue_grabbing)
   {
     try
@@ -710,6 +712,10 @@ void pcl::EnsensoGrabber::processGrabbing ()
           {
             // Get info about the computed point map and copy it into a std::vector
             NxLibItem dispMap = camera_[itmImages][itmDisparityMap];
+            min_disparity = camera_[itmParameters][itmDisparityMap][itmStereoMatching][itmScaledMinimumDisparity].asInt();
+            max_disparity = min_disparity;
+            max_disparity += camera_[itmParameters][itmDisparityMap][itmStereoMatching][itmNumberOfDisparities].asInt();
+            max_disparity -= 1;
             int width, height;
             dispMap.getBinaryDataInfo (&width, &height, 0, 0, 0, 0);
             disparity->header.stamp = getPCLStamp (timestamp);
@@ -768,7 +774,7 @@ void pcl::EnsensoGrabber::processGrabbing ()
         // Publish signals
         if (num_slots<sig_cb_ensenso_point_cloud_images_disparity> () > 0)
         {
-          point_cloud_images_disparity_signal_->operator () (cloud, rawimages, rectifiedimages, disparity);
+          point_cloud_images_disparity_signal_->operator () (cloud, rawimages, rectifiedimages, disparity, min_disparity, max_disparity);
         }
         else if (num_slots<sig_cb_ensenso_point_cloud_images> () > 0)
         {
@@ -776,11 +782,11 @@ void pcl::EnsensoGrabber::processGrabbing ()
         }
         else if (num_slots<sig_cb_ensenso_images_disparity> () > 0)
         {
-          images_disparity_signal_->operator () (rawimages, rectifiedimages, disparity);
+          images_disparity_signal_->operator () (rawimages, rectifiedimages, disparity, min_disparity, max_disparity);
         }
         else if (num_slots<sig_cb_ensenso_point_cloud_disparity> () > 0)
         {
-          point_cloud_disparity_signal_->operator () (cloud, disparity);
+          point_cloud_disparity_signal_->operator () (cloud, disparity, min_disparity, max_disparity);
         }
         else if (num_slots<sig_cb_ensenso_point_cloud> () > 0)
         {
@@ -788,7 +794,7 @@ void pcl::EnsensoGrabber::processGrabbing ()
         }
         else if (num_slots<sig_cb_ensenso_disparity> () > 0)
         {
-          disparity_signal_->operator () (disparity);
+          disparity_signal_->operator () (disparity, min_disparity, max_disparity);
         }
         else if (num_slots<sig_cb_ensenso_images> () > 0)
         {
