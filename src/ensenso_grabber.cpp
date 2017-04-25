@@ -721,15 +721,9 @@ void pcl::EnsensoGrabber::processGrabbing ()
             disparity->header.stamp = getPCLStamp (timestamp);
             disparity->width = width;
             disparity->height = height;
-            disparity->data.resize(width * height);
+            disparity->data.resize(width * height * sizeof(short));
             disparity->encoding = "CV_16SC1";
-            std::vector<short> disparity_data;
-            disparity_data.resize(width * height);
-            dispMap.getBinaryData(disparity_data.data(), disparity_data.size (), 0, 0);
-            for (int idx = 0; idx < disparity_data.size(); idx++)
-            {
-              disparity->data.at(idx) = disparity_data.at(idx);
-            }
+            dispMap.getBinaryData(disparity->data.data(), width * height * sizeof(short), 0, 0);
           }
 
           // If we need the point cloud we will convert the disparity
