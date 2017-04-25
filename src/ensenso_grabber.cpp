@@ -722,24 +722,13 @@ void pcl::EnsensoGrabber::processGrabbing ()
             disparity->width = width;
             disparity->height = height;
             disparity->data.resize(width * height);
-            disparity->encoding = getOpenCVType(1, 1, false);
+            disparity->encoding = "CV_16SC1";
             std::vector<short> disparity_data;
             disparity_data.resize(width * height);
             dispMap.getBinaryData(disparity_data.data(), disparity_data.size (), 0, 0);
             for (int idx = 0; idx < disparity_data.size(); idx++)
             {
-              if(disparity_data.at(idx) < 256)
-              {
-                disparity->data.at(idx) = disparity_data.at(idx);
-              }
-              else if(disparity_data.at(idx) > 255)
-              {
-                disparity->data.at(idx) = 255;
-              }
-              else if(disparity_data.at(idx) < 0)
-              {
-                disparity->data.at(idx) = 0;
-              }
+              disparity->data.at(idx) = disparity_data.at(idx);
             }
           }
 
