@@ -41,10 +41,35 @@ public:
     
     typedef void
     (sig_cb_ensenso_images)(const boost::shared_ptr<PairOfImages> &,const boost::shared_ptr<PairOfImages> &);
+
+    typedef void
+    (sig_cb_ensenso_disparity)(const pcl::PCLImage::Ptr &, const int &, const int &);
     
     typedef void
     (sig_cb_ensenso_point_cloud_images)(const pcl::PointCloud<pcl::PointXYZ>::Ptr &,
-                                        const boost::shared_ptr<PairOfImages> &,const boost::shared_ptr<PairOfImages> &);
+                                        const boost::shared_ptr<PairOfImages> &,
+                                        const boost::shared_ptr<PairOfImages> &);
+
+    typedef void
+    (sig_cb_ensenso_point_cloud_disparity)(const pcl::PointCloud<pcl::PointXYZ>::Ptr &,
+                                           const pcl::PCLImage::Ptr &,
+                                           const int &,
+                                           const int &);
+
+    typedef void
+    (sig_cb_ensenso_images_disparity)(const boost::shared_ptr<PairOfImages> &,
+                                      const boost::shared_ptr<PairOfImages> &,
+                                      const pcl::PCLImage::Ptr &,
+                                      const int &,
+                                      const int &);
+
+    typedef void
+    (sig_cb_ensenso_point_cloud_images_disparity)(const pcl::PointCloud<pcl::PointXYZ>::Ptr &,
+                                                  const boost::shared_ptr<PairOfImages> &,
+                                                  const boost::shared_ptr<PairOfImages> &,
+                                                  const pcl::PCLImage::Ptr &,
+                                                  const int &,
+                                                  const int &);
     /** @endcond */
     
     /** @brief Constructor */
@@ -461,9 +486,21 @@ protected:
     
     /** @brief Boost images signal */
     boost::signals2::signal<sig_cb_ensenso_images>* images_signal_;
+
+    /** @brief Boost disparity signal */
+    boost::signals2::signal<sig_cb_ensenso_disparity>* disparity_signal_;
     
     /** @brief Boost images + point cloud signal */
     boost::signals2::signal<sig_cb_ensenso_point_cloud_images>* point_cloud_images_signal_;
+
+    /** @brief Boost images + disparity signal */
+    boost::signals2::signal<sig_cb_ensenso_images_disparity>* images_disparity_signal_;
+
+    /** @brief Boost point cloud + disparity signal */
+    boost::signals2::signal<sig_cb_ensenso_point_cloud_disparity>* point_cloud_disparity_signal_;
+
+    /** @brief Boost images + point cloud + disparity signal */
+    boost::signals2::signal<sig_cb_ensenso_point_cloud_images_disparity>* point_cloud_images_disparity_signal_;
     
     /** @brief Reference to the camera tree */
     NxLibItem camera_;

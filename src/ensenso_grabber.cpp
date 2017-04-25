@@ -23,7 +23,11 @@ pcl::EnsensoGrabber::EnsensoGrabber () :
 {
   point_cloud_signal_ = createSignal<sig_cb_ensenso_point_cloud> ();
   images_signal_ = createSignal<sig_cb_ensenso_images> ();
+  disparity_signal_ = createSignal<sig_cb_ensenso_disparity> ();
   point_cloud_images_signal_ = createSignal<sig_cb_ensenso_point_cloud_images> ();
+  point_cloud_disparity_signal_ = createSignal<sig_cb_ensenso_point_cloud_disparity> ();
+  images_disparity_signal_ = createSignal<sig_cb_ensenso_images_disparity> ();
+  point_cloud_images_disparity_signal_ = createSignal<sig_cb_ensenso_point_cloud_images_disparity> ();
   PCL_INFO ("Initialising nxLib\n");
   try
   {
@@ -46,10 +50,16 @@ pcl::EnsensoGrabber::~EnsensoGrabber () throw ()
 
     disconnect_all_slots<sig_cb_ensenso_point_cloud> ();
     disconnect_all_slots<sig_cb_ensenso_images> ();
+    disconnect_all_slots<sig_cb_ensenso_disparity> ();
     disconnect_all_slots<sig_cb_ensenso_point_cloud_images> ();
+    disconnect_all_slots<sig_cb_ensenso_point_cloud_disparity> ();
+    disconnect_all_slots<sig_cb_ensenso_images_disparity> ();
+    disconnect_all_slots<sig_cb_ensenso_point_cloud_images_disparity> ();
 
     if (tcp_open_)
+    {
       closeTcpPort ();
+    }
     nxLibFinalize ();
   }
   catch (...)
@@ -293,7 +303,7 @@ bool pcl::EnsensoGrabber::getCameraInfo(std::string cam, sensor_msgs::CameraInfo
     cam_info.width = camera_[itmSensor][itmSize][0].asInt();
     cam_info.height = camera_[itmSensor][itmSize][1].asInt();
     cam_info.distortion_model = "plumb_bob";
-    // Distorsion factors
+    // Distortion factors
     cam_info.D.resize(5);
     for(std::size_t i = 0; i < cam_info.D.size(); ++i)
       cam_info.D[i] = camera_[itmCalibration][itmMonocular][cam][itmDistortion][i].asDouble();
@@ -403,10 +413,14 @@ int pcl::EnsensoGrabber::getPatternCount () const
 bool pcl::EnsensoGrabber::grabSingleCloud (pcl::PointCloud<pcl::PointXYZ> &cloud)
 {
   if (!device_open_)
+  {
     return (false);
+  }
 
   if (running_)
+  {
     return (false);
+  }
 
   try
   {
@@ -563,14 +577,23 @@ bool pcl::EnsensoGrabber::openTcpPort (const int port)
 void pcl::EnsensoGrabber::processGrabbing ()
 {
   bool continue_grabbing = running_;
+  int min_disparity;
+  int max_disparity;
   while (continue_grabbing)
   {
     try
     {
       // Publish cloud / images
-      if (num_slots<sig_cb_ensenso_point_cloud> () > 0 || num_slots<sig_cb_ensenso_images> () > 0 || num_slots<sig_cb_ensenso_point_cloud_images> () > 0)
+      if ((num_slots<sig_cb_ensenso_point_cloud> () > 0) ||
+          (num_slots<sig_cb_ensenso_images> () > 0) ||
+          (num_slots<sig_cb_ensenso_disparity> () > 0) ||
+          (num_slots<sig_cb_ensenso_point_cloud_images> () > 0) ||
+          (num_slots<sig_cb_ensenso_point_cloud_disparity> () > 0) ||
+          (num_slots<sig_cb_ensenso_images_disparity> () > 0) ||
+          (num_slots<sig_cb_ensenso_point_cloud_images_disparity> () > 0))
       {
         pcl::PointCloud<pcl::PointXYZ>::Ptr cloud (new pcl::PointCloud<pcl::PointXYZ>);
+        pcl::PCLImagePtr disparity (new pcl::PCLImage);
         boost::shared_ptr<PairOfImages> rawimages (new PairOfImages);
         boost::shared_ptr<PairOfImages> rectifiedimages (new PairOfImages);
         // Update FPS
@@ -589,7 +612,10 @@ void pcl::EnsensoGrabber::processGrabbing ()
         pattern_mutex_.lock ();
         last_stereo_pattern_ = std::string("");
         pattern_mutex_.unlock ();
-        if (num_slots<sig_cb_ensenso_images> () > 0 || num_slots<sig_cb_ensenso_point_cloud_images> () > 0)
+        if ((num_slots<sig_cb_ensenso_images> () > 0) ||
+            (num_slots<sig_cb_ensenso_point_cloud_images> () > 0) ||
+            (num_slots<sig_cb_ensenso_images_disparity> () > 0) ||
+            (num_slots<sig_cb_ensenso_point_cloud_images_disparity> () > 0))
         {
           // Rectify images
           NxLibCommand (cmdRectifyImages).execute ();
@@ -669,38 +695,94 @@ void pcl::EnsensoGrabber::processGrabbing ()
         }
 
         // Gather point cloud
-        if (num_slots<sig_cb_ensenso_point_cloud> () > 0 || num_slots<sig_cb_ensenso_point_cloud_images> () > 0)
+        if ((num_slots<sig_cb_ensenso_point_cloud> () > 0) ||
+            (num_slots<sig_cb_ensenso_disparity> () > 0) ||
+            (num_slots<sig_cb_ensenso_point_cloud_images> () > 0) ||
+            (num_slots<sig_cb_ensenso_images_disparity> () > 0) ||
+            (num_slots<sig_cb_ensenso_point_cloud_images_disparity> () > 0))
         {
-          // Stereo matching task
+          // Stereo matching task. If we are getting the disparity or point
+          // cloud we will need this information
           NxLibCommand (cmdComputeDisparityMap).execute ();
-          // Convert disparity map into XYZ data for each pixel
-          NxLibCommand (cmdComputePointMap).execute ();
-          // Get info about the computed point map and copy it into a std::vector
-          std::vector<float> pointMap;
-          int width, height;
-          camera_[itmImages][itmPointMap].getBinaryDataInfo (&width, &height, 0, 0, 0, 0);
-          camera_[itmImages][itmPointMap].getBinaryData (pointMap, 0);
-          // Copy point cloud and convert in meters
-          cloud->header.stamp = getPCLStamp (timestamp);
-          cloud->points.resize (height * width);
-          cloud->width = width;
-          cloud->height = height;
-          cloud->is_dense = false;
-          // Copy data in point cloud (and convert milimeters in meters)
-          for (size_t i = 0; i < pointMap.size (); i += 3)
+          // If we need the point cloud we will convert the disparity
+          // information into the point cloud
+          if((num_slots<sig_cb_ensenso_disparity> () > 0) ||
+             (num_slots<sig_cb_ensenso_images_disparity> () > 0) ||
+             (num_slots<sig_cb_ensenso_point_cloud_images_disparity> () > 0))
           {
-            cloud->points[i / 3].x = pointMap[i] / 1000.0;
-            cloud->points[i / 3].y = pointMap[i + 1] / 1000.0;
-            cloud->points[i / 3].z = pointMap[i + 2] / 1000.0;
+            // Get info about the computed point map and copy it into a std::vector
+            NxLibItem dispMap = camera_[itmImages][itmDisparityMap];
+            min_disparity = camera_[itmParameters][itmDisparityMap][itmStereoMatching][itmScaledMinimumDisparity].asInt();
+            max_disparity = min_disparity;
+            max_disparity += camera_[itmParameters][itmDisparityMap][itmStereoMatching][itmNumberOfDisparities].asInt();
+            max_disparity -= 1;
+            int width, height;
+            dispMap.getBinaryDataInfo (&width, &height, 0, 0, 0, 0);
+            disparity->header.stamp = getPCLStamp (timestamp);
+            disparity->width = width;
+            disparity->height = height;
+            disparity->data.resize(width * height * sizeof(short));
+            disparity->encoding = "CV_16SC1";
+            dispMap.getBinaryData(disparity->data.data(), width * height * sizeof(short), 0, 0);
+          }
+
+          // If we need the point cloud we will convert the disparity
+          // information into the point cloud
+          if((num_slots<sig_cb_ensenso_point_cloud> () > 0) ||
+             (num_slots<sig_cb_ensenso_point_cloud_images> () > 0) ||
+             (num_slots<sig_cb_ensenso_point_cloud_images_disparity> () > 0))
+          {
+            // Convert disparity map into XYZ data for each pixel
+            NxLibCommand (cmdComputePointMap).execute ();
+            // Get info about the computed point map and copy it into a std::vector
+            std::vector<float> pointMap;
+            int width, height;
+            camera_[itmImages][itmPointMap].getBinaryDataInfo (&width, &height, 0, 0, 0, 0);
+            camera_[itmImages][itmPointMap].getBinaryData (pointMap, 0);
+            // Copy point cloud and convert in meters
+            cloud->header.stamp = getPCLStamp (timestamp);
+            cloud->points.resize (height * width);
+            cloud->width = width;
+            cloud->height = height;
+            cloud->is_dense = false;
+            // Copy data in point cloud (and convert milimeters in meters)
+            for (size_t i = 0; i < pointMap.size (); i += 3)
+            {
+              cloud->points[i / 3].x = pointMap[i] / 1000.0;
+              cloud->points[i / 3].y = pointMap[i + 1] / 1000.0;
+              cloud->points[i / 3].z = pointMap[i + 2] / 1000.0;
+            }
           }
         }
         // Publish signals
-        if (num_slots<sig_cb_ensenso_point_cloud_images> () > 0)
+        if (num_slots<sig_cb_ensenso_point_cloud_images_disparity> () > 0)
+        {
+          point_cloud_images_disparity_signal_->operator () (cloud, rawimages, rectifiedimages, disparity, min_disparity, max_disparity);
+        }
+        else if (num_slots<sig_cb_ensenso_point_cloud_images> () > 0)
+        {
           point_cloud_images_signal_->operator () (cloud, rawimages, rectifiedimages);
+        }
+        else if (num_slots<sig_cb_ensenso_images_disparity> () > 0)
+        {
+          images_disparity_signal_->operator () (rawimages, rectifiedimages, disparity, min_disparity, max_disparity);
+        }
+        else if (num_slots<sig_cb_ensenso_point_cloud_disparity> () > 0)
+        {
+          point_cloud_disparity_signal_->operator () (cloud, disparity, min_disparity, max_disparity);
+        }
         else if (num_slots<sig_cb_ensenso_point_cloud> () > 0)
+        {
           point_cloud_signal_->operator () (cloud);
+        }
+        else if (num_slots<sig_cb_ensenso_disparity> () > 0)
+        {
+          disparity_signal_->operator () (disparity, min_disparity, max_disparity);
+        }
         else if (num_slots<sig_cb_ensenso_images> () > 0)
+        {
           images_signal_->operator () (rawimages,rectifiedimages);
+        }
       }
       continue_grabbing = running_;
     }
