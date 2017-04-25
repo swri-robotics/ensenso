@@ -3,6 +3,7 @@
 #include <sensor_msgs/Image.h>
 #include <cv_bridge/cv_bridge.h>
 #include <pcl_ros/point_cloud.h>
+#include <pcl/PCLImage.h>
 // Conversions
 #include <eigen_conversions/eigen_msg.h>
 // Ensenso grabber
@@ -17,6 +18,7 @@
 // Messages
 #include <ensenso/RawStereoPattern.h>
 #include <geometry_msgs/PoseStamped.h>
+#include <stereo_msgs/DisparityImage.h>
 #include <sensor_msgs/PointCloud2.h>
 #include <std_msgs/String.h>
 // Services
@@ -43,6 +45,7 @@ class EnsensoDriver
     image_transport::CameraPublisher  r_raw_pub_;
     image_transport::Publisher        l_rectified_pub_;
     image_transport::Publisher        r_rectified_pub_;
+    ros::Publisher                    disparity_pub_;
     // Publishers
     ros::Publisher                    cloud_pub_;
     ros::Publisher                    pattern_pose_pub_;
@@ -50,6 +53,7 @@ class EnsensoDriver
     // Streaming configuration
     bool                              is_streaming_cloud_;
     bool                              is_streaming_images_;
+    bool                              is_streaming_disparity_;
     bool                              stream_calib_pattern_;
     // Camera info
     ros::Publisher                    linfo_pub_;
@@ -64,6 +68,7 @@ class EnsensoDriver
      EnsensoDriver():
       is_streaming_images_(false),
       is_streaming_cloud_(false),
+      is_streaming_disparity_(false),
       nh_private_("~")
     {
       // Read parameters
@@ -83,6 +88,7 @@ class EnsensoDriver
       r_raw_pub_ = it.advertiseCamera("right/image_raw", 1);
       l_rectified_pub_ = it.advertise("left/image_rect", 1);
       r_rectified_pub_ = it.advertise("right/image_rect", 1);
+      disparity_pub_ = nh_.advertise<stereo_msgs::DisparityImage>("disparity", 1, false);
       cloud_pub_ = nh_.advertise<sensor_msgs::PointCloud2 >("depth/points", 1, false);
       linfo_pub_=nh_.advertise<sensor_msgs::CameraInfo> ("left/camera_info", 1, false);
       rinfo_pub_=nh_.advertise<sensor_msgs::CameraInfo> ("right/camera_info", 1, false);
@@ -98,7 +104,7 @@ class EnsensoDriver
       f = boost::bind(&EnsensoDriver::CameraParametersCallback, this, _1, _2);
       reconfigure_server_.setCallback(f);
       // Start the camera. By default only stream images. You can use dynreconfigure to change the streaming
-      configureStreaming(true, false);
+      configureStreaming(true, false, false);
       ensenso_ptr_->start();
       // Advertise services
       calibrate_srv_ = nh_.advertiseService("calibrate_handeye", &EnsensoDriver::calibrateHandEyeCB, this);
@@ -224,6 +230,7 @@ class EnsensoDriver
       ROS_DEBUG("Stream Parameters");
       ROS_DEBUG_STREAM("Cloud: "   << std::boolalpha << config.groups.activate.Cloud);
       ROS_DEBUG_STREAM("Images: "   << std::boolalpha << config.groups.activate.Images);
+      ROS_DEBUG_STREAM("Disparity: " << std::boolalpha << config.groups.activate.Disparity);
       ROS_DEBUG("---");
       // Capture parameters
       ensenso_ptr_->setAutoBlackLevel(config.groups.capture.AutoBlackLevel);
@@ -263,44 +270,108 @@ class EnsensoDriver
       ensenso_ptr_->setFillBorderSpread(config.groups.postproc.FillBorderSpread);
       ensenso_ptr_->setFillRegionSize(config.groups.postproc.FillRegionSize);
       // Streaming parameters
-      configureStreaming(config.groups.activate.Cloud, config.groups.activate.Images);
+      configureStreaming(config.groups.activate.Cloud, config.groups.activate.Images, config.groups.activate.Disparity);
     }
     
-    bool configureStreaming(const bool cloud, const bool images)
+    bool configureStreaming(const bool cloud, const bool images, const bool disparity)
     {
-      if ((is_streaming_cloud_ == cloud) && (is_streaming_images_ == images))
+      if ((is_streaming_cloud_ == cloud) && (is_streaming_images_ == images) && (is_streaming_disparity_ == disparity))
+      {
         return true;  // Nothing to be done here
+      }
       is_streaming_cloud_ = cloud;
       is_streaming_images_ = images;
+      is_streaming_disparity_ = disparity;
       bool was_running = ensenso_ptr_->isRunning();
       if (was_running)
         ensenso_ptr_->stop();
       // Disconnect previous connection
       connection_.disconnect();
       // Connect new signals
+      if (cloud && images && disparity)
+      {
+        boost::function<void(
+              const boost::shared_ptr<PointCloudXYZ>&,
+              const boost::shared_ptr<PairOfImages>&,
+              const boost::shared_ptr<PairOfImages>&,
+              const boost::shared_ptr<pcl::PCLImage> &,
+              const int &,
+              const int &)> f = boost::bind(
+                &EnsensoDriver::grabberCallbackCloudImagesDisparity,
+                this,
+                _1, _2, _3, _4, _5, _6);
+        connection_ = ensenso_ptr_->registerCallback(f);
+      }
       if (cloud && images)
       {
         boost::function<void(
-          const boost::shared_ptr<PointCloudXYZ>&, 
+          const boost::shared_ptr<PointCloudXYZ>&,
           const boost::shared_ptr<PairOfImages>&,
-          const boost::shared_ptr<PairOfImages>&)> f = boost::bind (&EnsensoDriver::grabberCallback, this, _1, _2, _3);
+          const boost::shared_ptr<PairOfImages>&)> f = boost::bind (
+              &EnsensoDriver::grabberCallbackCloudImages,
+              this,
+              _1, _2, _3);
+        connection_ = ensenso_ptr_->registerCallback(f);
+      }
+      else if (cloud && disparity)
+      {
+        boost::function<void(
+          const boost::shared_ptr<PointCloudXYZ>&,
+          const boost::shared_ptr<pcl::PCLImage>&,
+          const int &,
+          const int &)> f = boost::bind (
+              &EnsensoDriver::grabberCallbackCloudDisparity,
+              this,
+              _1, _2, _3, _4);
+        connection_ = ensenso_ptr_->registerCallback(f);
+      }
+      else if (images && disparity)
+      {
+        boost::function<void(
+          const boost::shared_ptr<PairOfImages>&,
+          const boost::shared_ptr<PairOfImages>&,
+          const boost::shared_ptr<pcl::PCLImage>&,
+          const int &,
+          const int &)> f = boost::bind(
+              &EnsensoDriver::grabberCallbackImagesDisparity,
+              this,
+              _1, _2, _3, _4, _5);
         connection_ = ensenso_ptr_->registerCallback(f);
       }
       else if (images)
       {
         boost::function<void(
           const boost::shared_ptr<PairOfImages>&,
-          const boost::shared_ptr<PairOfImages>&)> f = boost::bind (&EnsensoDriver::grabberCallback, this, _1, _2);
+          const boost::shared_ptr<PairOfImages>&)> f = boost::bind(
+              &EnsensoDriver::grabberCallbackImages,
+              this,
+              _1, _2);
         connection_ = ensenso_ptr_->registerCallback(f);
       }
       else if (cloud)
       {
         boost::function<void(
-            const boost::shared_ptr<PointCloudXYZ>&)> f = boost::bind (&EnsensoDriver::grabberCallback, this, _1);
+            const boost::shared_ptr<PointCloudXYZ>&)> f = boost::bind(
+              &EnsensoDriver::grabberCallbackCloud,
+              this,
+              _1);
+        connection_ = ensenso_ptr_->registerCallback(f);
+      }
+      else if (disparity)
+      {
+        boost::function<void(
+          const boost::shared_ptr<pcl::PCLImage>&,
+          const int &,
+          const int &)> f = boost::bind(
+              &EnsensoDriver::grabberCallbackDisparity,
+              this,
+              _1, _2, _3);
         connection_ = ensenso_ptr_->registerCallback(f);
       }
       if (was_running)
+      {
         ensenso_ptr_->start();
+      }
       return true;
     }
     
@@ -349,8 +420,32 @@ class EnsensoDriver
         ensenso_ptr_->start();
       return true;
     }
+
+    void grabberCallbackDisparity( const boost::shared_ptr<pcl::PCLImage>& disparity,
+                                   const int& min_disparity,
+                                   const int& max_disparity)
+    {
+      if (disparity_pub_.getNumSubscribers() > 0)
+      {
+        ros::Time now = ros::Time::now();
+        sensor_msgs::ImagePtr image;
+        stereo_msgs::DisparityImage disparity_msg;
+        disparity_msg.min_disparity = min_disparity;
+        disparity_msg.max_disparity = max_disparity;
+        short *image_array = reinterpret_cast<short *>(disparity->data.data());
+        cv::Mat image_mat(disparity->height, disparity->width, CV_16SC1, image_array);
+        std_msgs::Header header;
+        header.frame_id = camera_frame_id_;
+        header.stamp = now;
+        image_mat.convertTo(image_mat, CV_32FC1);
+        image = cv_bridge::CvImage(header, sensor_msgs::image_encodings::TYPE_32FC1, image_mat).toImageMsg();
+        disparity_msg.header = image->header;
+        disparity_msg.image = *image;
+        disparity_pub_.publish(disparity_msg);
+      }
+    }
     
-    void grabberCallback( const boost::shared_ptr<PointCloudXYZ>& cloud)
+    void grabberCallbackCloud( const boost::shared_ptr<PointCloudXYZ>& cloud)
     {
       // Point cloud
       if (cloud_pub_.getNumSubscribers() > 0)
@@ -362,8 +457,8 @@ class EnsensoDriver
         cloud_pub_.publish(cloud_msg);
       }
     }
-    
-    void grabberCallback( const boost::shared_ptr<PairOfImages>& rawimages, const boost::shared_ptr<PairOfImages>& rectifiedimages)
+
+    void grabberCallbackImages( const boost::shared_ptr<PairOfImages>& rawimages, const boost::shared_ptr<PairOfImages>& rectifiedimages)
     {
       ros::Time now = ros::Time::now();
       // Get cameras info
@@ -376,18 +471,45 @@ class EnsensoDriver
       rinfo.header.frame_id = camera_frame_id_;
       // Images
       if (l_raw_pub_.getNumSubscribers() > 0)
+      {
         l_raw_pub_.publish(*toImageMsg(rawimages->first, now), linfo, now);
+      }
       if (r_raw_pub_.getNumSubscribers() > 0)
+      {
         r_raw_pub_.publish(*toImageMsg(rawimages->second, now), rinfo, now);
+      }
       if (l_rectified_pub_.getNumSubscribers() > 0)
+      {
         l_rectified_pub_.publish(toImageMsg(rectifiedimages->first, now));
+      }
       if (r_rectified_pub_.getNumSubscribers() > 0)
+      {
         r_rectified_pub_.publish(toImageMsg(rectifiedimages->second, now));
+      }
       // Publish calibration pattern info (if any)
       publishCalibrationPattern(now);
     }
     
-    void grabberCallback( const boost::shared_ptr<PointCloudXYZ>& cloud,
+    void grabberCallbackImagesDisparity( const boost::shared_ptr<PairOfImages>& rawimages,
+                          const boost::shared_ptr<PairOfImages>& rectifiedimages,
+                          const boost::shared_ptr<pcl::PCLImage>& disparity,
+                          const int& min_disparity,
+                          const int& max_disparity)
+    {
+      grabberCallbackImages(rawimages, rectifiedimages);
+      grabberCallbackDisparity(disparity, min_disparity, max_disparity);
+    }
+
+    void grabberCallbackCloudDisparity( const boost::shared_ptr<PointCloudXYZ>& cloud,
+                          const boost::shared_ptr<pcl::PCLImage>& disparity,
+                          const int& min_disparity,
+                          const int& max_disparity)
+    {
+      grabberCallbackCloud(cloud);
+      grabberCallbackDisparity(disparity, min_disparity, max_disparity);
+    }
+
+    void grabberCallbackCloudImages( const boost::shared_ptr<PointCloudXYZ>& cloud,
                           const boost::shared_ptr<PairOfImages>& rawimages, const boost::shared_ptr<PairOfImages>& rectifiedimages)
     {
       ros::Time now = ros::Time::now();
@@ -401,13 +523,21 @@ class EnsensoDriver
       rinfo.header.frame_id = camera_frame_id_;
       // Images
       if (l_raw_pub_.getNumSubscribers() > 0)
+      {
         l_raw_pub_.publish(*toImageMsg(rawimages->first, now), linfo, now);
+      }
       if (r_raw_pub_.getNumSubscribers() > 0)
+      {
         r_raw_pub_.publish(*toImageMsg(rawimages->second, now), rinfo, now);
+      }
       if (l_rectified_pub_.getNumSubscribers() > 0)
+      {
         l_rectified_pub_.publish(toImageMsg(rectifiedimages->first, now));
+      }
       if (r_rectified_pub_.getNumSubscribers() > 0)
+      {
         r_rectified_pub_.publish(toImageMsg(rectifiedimages->second, now));
+      }
       // Publish calibration pattern info (if any)
       publishCalibrationPattern(now);
       // Camera_info
@@ -423,7 +553,19 @@ class EnsensoDriver
         cloud_pub_.publish(cloud_msg);
       }
     }
-    
+
+    void grabberCallbackCloudImagesDisparity( const boost::shared_ptr<PointCloudXYZ>& cloud,
+                          const boost::shared_ptr<PairOfImages>& rawimages,
+                          const boost::shared_ptr<PairOfImages>& rectifiedimages,
+                          const boost::shared_ptr<pcl::PCLImage>& disparity,
+                          const int& min_disparity,
+                          const int& max_disparity)
+    {
+      grabberCallbackCloud(cloud);
+      grabberCallbackImages(rawimages, rectifiedimages);
+      grabberCallbackDisparity(disparity, min_disparity, max_disparity);
+    }
+
     void publishCalibrationPattern(const ros::Time &now)
     {
       int pose_subs = pattern_pose_pub_.getNumSubscribers();
