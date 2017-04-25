@@ -432,7 +432,13 @@ class EnsensoDriver
         stereo_msgs::DisparityImage disparity_msg;
         disparity_msg.min_disparity = min_disparity;
         disparity_msg.max_disparity = max_disparity;
-        image = toImageMsg(*disparity, now);
+        unsigned char *image_array = reinterpret_cast<unsigned char *>(disparity->data.data());
+        cv::Mat image_mat(disparity->height, disparity->width, CV_8UC1, image_array);
+        std_msgs::Header header;
+        header.frame_id = camera_frame_id_;
+        header.stamp = now;
+        image_mat.convertTo(image_mat, CV_32FC1);
+        image = cv_bridge::CvImage(header, sensor_msgs::image_encodings::TYPE_32FC1, image_mat).toImageMsg();
         disparity_msg.header = image->header;
         disparity_msg.image = *image;
         disparity_pub_.publish(disparity_msg);
