@@ -177,6 +177,15 @@ public:
     /** @brief Gets the number of collected patterns with successful observations in two cameras.
      * @returns The number of pattern in the camera buffer */
     int getPatternCount () const;
+
+    /** @brief Postprocesses an image to reconstruct the point cloud and
+     * disparity information.
+     * @param[in] image The camera image as a 1D vector of pixel values
+     * @param[out] cloud The cloud to be filled
+     * @return True if successful, false otherwise */
+    bool getPointCloudFromImage (const std::vector<float> &left_image,
+                                 const std::vector<float> &right_image,
+                                 pcl::PointCloud<pcl::PointXYZ> &cloud) const;
     
     /** @brief Capture a single point cloud and store it
      * @param[out] cloud The cloud to be filled

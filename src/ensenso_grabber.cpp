@@ -410,6 +410,53 @@ int pcl::EnsensoGrabber::getPatternCount () const
   return ( (*root_)[itmParameters][itmPatternCount].asInt ());
 }
 
+bool pcl::EnsensoGrabber::getPointCloudFromImage(
+  const std::vector<float> &left_image,
+  const std::vector<float> &right_image,
+  pcl::PointCloud<pcl::PointXYZ> &cloud) const
+{
+  if (!device_open_)
+  {
+    return false;
+  }
+
+  if (running_)
+  {
+    return false;
+  }
+
+  try
+  {
+    camera_[itmImages][itmRectified][itmLeft].setBinaryData(left_image);
+    camera_[itmImages][itmRectified][itmRight].setBinaryData(right_image);
+    // Do the stereo matching
+    NxLibCommand(cmdComputeDisparityMap).execute();
+    NxLibCommand(cmdComputePointMap).execute();
+    std::vector<float> pointMap;
+    int width, height;
+    camera_[itmImages][itmPointMap].getBinaryDataInfo (&width, &height, 0, 0, 0, 0);
+    camera_[itmImages][itmPointMap].getBinaryData (pointMap, 0);
+    // Copy point cloud and convert in meters
+    cloud.resize (height * width);
+    cloud.width = width;
+    cloud.height = height;
+    cloud.is_dense = false;
+    // Copy data in point cloud (and convert milimeters in meters)
+    for (size_t i = 0; i < pointMap.size (); i += 3)
+    {
+      cloud.points[i / 3].x = pointMap[i] / 1000.0;
+      cloud.points[i / 3].y = pointMap[i + 1] / 1000.0;
+      cloud.points[i / 3].z = pointMap[i + 2] / 1000.0;
+    }
+  }
+  catch (NxLibException &ex)
+  {
+    ensensoExceptionHandling (ex, "getPointCloudFromImage");
+    return false;
+  }
+  return true;
+}
+
 bool pcl::EnsensoGrabber::grabSingleCloud (pcl::PointCloud<pcl::PointXYZ> &cloud)
 {
   if (!device_open_)
