@@ -427,7 +427,6 @@ class EnsensoDriver
     {
       if (disparity_pub_.getNumSubscribers() > 0)
       {
-        ros::Time now = ros::Time::now();
         sensor_msgs::ImagePtr image;
         stereo_msgs::DisparityImage disparity_msg;
         disparity_msg.min_disparity = min_disparity;
@@ -436,7 +435,7 @@ class EnsensoDriver
         cv::Mat image_mat(disparity->height, disparity->width, CV_16SC1, image_array);
         std_msgs::Header header;
         header.frame_id = camera_frame_id_;
-        header.stamp = now;
+        header.stamp = ros::Time(disparity->header.stamp);
         image_mat.convertTo(image_mat, CV_32FC1);
         image = cv_bridge::CvImage(header, sensor_msgs::image_encodings::TYPE_32FC1, image_mat).toImageMsg();
         disparity_msg.header = image->header;
@@ -452,7 +451,7 @@ class EnsensoDriver
       {
         cloud->header.frame_id = camera_frame_id_;
         sensor_msgs::PointCloud2 cloud_msg;
-        cloud_msg.header.stamp = ros::Time::now();
+        cloud_msg.header.stamp = ros::Time(cloud->header.stamp);
         pcl::toROSMsg(*cloud, cloud_msg);
         cloud_pub_.publish(cloud_msg);
       }
@@ -460,34 +459,48 @@ class EnsensoDriver
 
     void grabberCallbackImages( const boost::shared_ptr<PairOfImages>& rawimages, const boost::shared_ptr<PairOfImages>& rectifiedimages)
     {
-      ros::Time now = ros::Time::now();
+      // Convert all timestamps from PCL time to ROS time
+      ros::Time raw_left_time = ros::Time(rawimages->first.header.stamp);
+      ros::Time raw_right_time = ros::Time(rawimages->second.header.stamp);
+      ros::Time rectified_left_time = ros::Time(rectifiedimages->first.header.stamp);
+      ros::Time rectified_right_time = ros::Time(rectifiedimages->second.header.stamp);
+
       // Get cameras info
       sensor_msgs::CameraInfo linfo, rinfo;
       ensenso_ptr_->getCameraInfo("Left", linfo);
       ensenso_ptr_->getCameraInfo("Right", rinfo);
-      linfo.header.stamp = now;
+      linfo.header.stamp = raw_left_time;
       linfo.header.frame_id = camera_frame_id_;
-      rinfo.header.stamp = now;
+      rinfo.header.stamp = raw_right_time;
       rinfo.header.frame_id = camera_frame_id_;
       // Images
       if (l_raw_pub_.getNumSubscribers() > 0)
       {
-        l_raw_pub_.publish(*toImageMsg(rawimages->first, now), linfo, now);
+        l_raw_pub_.publish(*toImageMsg(rawimages->first, raw_left_time),
+                           linfo,
+                           raw_left_time);
       }
       if (r_raw_pub_.getNumSubscribers() > 0)
       {
-        r_raw_pub_.publish(*toImageMsg(rawimages->second, now), rinfo, now);
+        r_raw_pub_.publish(*toImageMsg(rawimages->second, raw_right_time),
+                           rinfo,
+                           raw_right_time);
       }
       if (l_rectified_pub_.getNumSubscribers() > 0)
       {
-        l_rectified_pub_.publish(toImageMsg(rectifiedimages->first, now));
+        l_rectified_pub_.publish(toImageMsg(
+                                   rectifiedimages->first,
+                                   rectified_left_time));
       }
       if (r_rectified_pub_.getNumSubscribers() > 0)
       {
-        r_rectified_pub_.publish(toImageMsg(rectifiedimages->second, now));
+        r_rectified_pub_.publish(toImageMsg(
+                                   rectifiedimages->second,
+                                   rectified_right_time));
       }
-      // Publish calibration pattern info (if any)
-      publishCalibrationPattern(now);
+      // Publish calibration pattern info (if any). Assume calibration time is
+      // associated with the left camera image time
+      publishCalibrationPattern(raw_left_time);
     }
     
     void grabberCallbackImagesDisparity( const boost::shared_ptr<PairOfImages>& rawimages,
@@ -512,34 +525,52 @@ class EnsensoDriver
     void grabberCallbackCloudImages( const boost::shared_ptr<PointCloudXYZ>& cloud,
                           const boost::shared_ptr<PairOfImages>& rawimages, const boost::shared_ptr<PairOfImages>& rectifiedimages)
     {
-      ros::Time now = ros::Time::now();
+      // Convert all timestamps from PCL format to ROS format
+      ros::Time left_raw_time = ros::Time(rawimages->first.header.stamp);
+      ros::Time right_raw_time = ros::Time(rawimages->second.header.stamp);
+      ros::Time left_rectified_time = ros::Time(rectifiedimages->first.header.stamp);
+      ros::Time right_rectified_time = ros::Time(rectifiedimages->second.header.stamp);
+      ros::Time cloud_time = ros::Time(cloud->header.stamp);
       // Get cameras info
       sensor_msgs::CameraInfo linfo, rinfo;
       ensenso_ptr_->getCameraInfo("Left", linfo);
       ensenso_ptr_->getCameraInfo("Right", rinfo);
-      linfo.header.stamp = now;
+      linfo.header.stamp = ros::Time(rawimages->first.header.stamp);
       linfo.header.frame_id = camera_frame_id_;
-      rinfo.header.stamp = now;
+      rinfo.header.stamp = ros::Time(rawimages->second.header.stamp);
       rinfo.header.frame_id = camera_frame_id_;
       // Images
       if (l_raw_pub_.getNumSubscribers() > 0)
       {
-        l_raw_pub_.publish(*toImageMsg(rawimages->first, now), linfo, now);
+        l_raw_pub_.publish(*toImageMsg(
+                             rawimages->first,
+                             left_raw_time),
+                           linfo,
+                           left_raw_time);
       }
       if (r_raw_pub_.getNumSubscribers() > 0)
       {
-        r_raw_pub_.publish(*toImageMsg(rawimages->second, now), rinfo, now);
+        r_raw_pub_.publish(*toImageMsg(
+                             rawimages->second,
+                             right_raw_time),
+                           rinfo,
+                           right_raw_time);
       }
       if (l_rectified_pub_.getNumSubscribers() > 0)
       {
-        l_rectified_pub_.publish(toImageMsg(rectifiedimages->first, now));
+        l_rectified_pub_.publish(toImageMsg(
+                                   rectifiedimages->first,
+                                   left_rectified_time));
       }
       if (r_rectified_pub_.getNumSubscribers() > 0)
       {
-        r_rectified_pub_.publish(toImageMsg(rectifiedimages->second, now));
+        r_rectified_pub_.publish(toImageMsg(
+                                   rectifiedimages->second,
+                                   right_rectified_time));
       }
-      // Publish calibration pattern info (if any)
-      publishCalibrationPattern(now);
+      // Publish calibration pattern info (if any). Assume the time is for the
+      // left raw image
+      publishCalibrationPattern(left_rectified_time);
       // Camera_info
       linfo_pub_.publish(linfo);
       rinfo_pub_.publish(rinfo);
@@ -549,7 +580,7 @@ class EnsensoDriver
         cloud->header.frame_id = camera_frame_id_;
         sensor_msgs::PointCloud2 cloud_msg;
         pcl::toROSMsg(*cloud, cloud_msg);
-        cloud_msg.header.stamp = now;
+        cloud_msg.header.stamp = cloud_time;
         cloud_pub_.publish(cloud_msg);
       }
     }
@@ -566,7 +597,7 @@ class EnsensoDriver
       grabberCallbackDisparity(disparity, min_disparity, max_disparity);
     }
 
-    void publishCalibrationPattern(const ros::Time &now)
+    void publishCalibrationPattern(const ros::Time &calibration_time)
     {
       int pose_subs = pattern_pose_pub_.getNumSubscribers();
       int raw_subs = pattern_raw_pub_.getNumSubscribers();
@@ -586,7 +617,7 @@ class EnsensoDriver
             // Populate RawStereoPattern msg
             ensenso::RawStereoPattern msg;
             msg.header.frame_id = camera_frame_id_;
-            msg.header.stamp = now;
+            msg.header.stamp = calibration_time;
             msg.grid_spacing = grid_spacing;
             msg.grid_size = grid_size;
             num_points = grid_size[0]*grid_size[1];
@@ -606,7 +637,7 @@ class EnsensoDriver
             // Populate PoseStamped msg
             geometry_msgs::PoseStamped pose_msg;
             pose_msg.header.frame_id = camera_frame_id_;
-            pose_msg.header.stamp = now;
+            pose_msg.header.stamp = calibration_time;
             tf::poseEigenToMsg(pattern_pose, pose_msg.pose);
             pattern_pose_pub_.publish(pose_msg);
           }
@@ -614,7 +645,9 @@ class EnsensoDriver
       }
     }
     
-    sensor_msgs::ImagePtr toImageMsg(pcl::PCLImage pcl_image, const ros::Time &now)
+    sensor_msgs::ImagePtr toImageMsg(
+        pcl::PCLImage pcl_image,
+        const ros::Time &image_time)
     {
       unsigned char *image_array = reinterpret_cast<unsigned char *>(&pcl_image.data[0]);
       int type(CV_8UC1);
@@ -627,7 +660,7 @@ class EnsensoDriver
       cv::Mat image_mat(pcl_image.height, pcl_image.width, type, image_array);
       std_msgs::Header header;
       header.frame_id = camera_frame_id_;
-      header.stamp = now;
+      header.stamp = image_time;
       return cv_bridge::CvImage(header, encoding, image_mat).toImageMsg();
     }
 };
