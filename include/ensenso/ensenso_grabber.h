@@ -183,8 +183,10 @@ public:
      * @param[in] image The camera image as a 1D vector of pixel values
      * @param[out] cloud The cloud to be filled
      * @return True if successful, false otherwise */
-    bool getPointCloudFromImage (const std::vector<unsigned char> &left_image,
-                                 const std::vector<unsigned char> &right_image,
+    bool getPointCloudFromImage (const std::vector<pcl::uint8_t> &left_image,
+                                 const std::vector<pcl::uint8_t> &right_image,
+                                 const int width,
+                                 const int height,
                                  pcl::PointCloud<pcl::PointXYZ> &cloud) const;
     
     /** @brief Capture a single point cloud and store it

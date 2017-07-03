@@ -67,8 +67,19 @@ void EnsensoPostprocess::processImages(
   ROS_ERROR("DJA: Inside callback");
   pcl::PointCloud<pcl::PointXYZ> cloud;
   pcl_conversions::toPCL(left_image->header, cloud.header);
-  ensenso_ptr_->getPointCloudFromImage(left_image->data, right_image->data, cloud);
+  bool success;
+  success = ensenso_ptr_->getPointCloudFromImage(
+    left_image->data,
+    right_image->data,
+    left_image->width,
+    left_image->height,
+    cloud);
+  if (success)
+  {
   cloud_pub_.publish(cloud);
+  }
+
+  ROS_ERROR_COND(!success, "Failed to generate point cloud");
 }
 
 
