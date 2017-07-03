@@ -12,5 +12,7 @@
   <node name="postprocessor" pkg="ensenso" type="ensenso_postprocess" ns="camera" output="screen"> 
     <param name="serial"                type="string" value="$(arg serial)" />
   </node>
+
+  <node pkg="tf" type="static_transform_publisher" name="tf_broadcaster" args="0 0 0 0 0 0 1 map camera_optical_frame 100" />
   
 </launch>
