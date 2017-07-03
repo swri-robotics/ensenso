@@ -415,16 +415,13 @@ bool pcl::EnsensoGrabber::getPointCloudFromImage(
   const std::vector<pcl::uint8_t> &right_image,
   const int width,
   const int height,
-  pcl::PointCloud<pcl::PointXYZ> &cloud) const
+  pcl::PointCloud<pcl::PointXYZ> &cloud,
+  std::string &operation_status) const
 {
   bool ret_val = false;
   if (!device_open_)
   {
-    return false;
-  }
-
-  if (running_)
-  {
+    operation_status = "Device not open";
     return false;
   }
 
@@ -439,6 +436,7 @@ bool pcl::EnsensoGrabber::getPointCloudFromImage(
       height,
       1,
       false);
+    operation_status = std::string(nxLibTranslateReturnCode(return_code));
     if (return_code == NxLibOperationSucceeded)
     {
       camera_[itmImages][itmRaw][itmRight].setBinaryData(
@@ -448,6 +446,7 @@ bool pcl::EnsensoGrabber::getPointCloudFromImage(
         height,
         1,
         false);
+      operation_status = std::string(nxLibTranslateReturnCode(return_code));
       if (return_code == NxLibOperationSucceeded)
       {
         // Do the stereo matching
@@ -456,7 +455,13 @@ bool pcl::EnsensoGrabber::getPointCloudFromImage(
         std::vector<float> pointMap;
         int cloud_width;
         int cloud_height;
-        camera_[itmImages][itmPointMap].getBinaryDataInfo (&cloud_width, &cloud_height, 0, 0, 0, 0);
+        camera_[itmImages][itmPointMap].getBinaryDataInfo(
+          &cloud_width,
+          &cloud_height,
+          0,
+          0,
+          0,
+          0);
         camera_[itmImages][itmPointMap].getBinaryData (pointMap, 0);
         // Copy point cloud and convert in meters
         cloud.resize (cloud_height * cloud_width);

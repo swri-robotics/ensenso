@@ -187,7 +187,8 @@ public:
                                  const std::vector<pcl::uint8_t> &right_image,
                                  const int width,
                                  const int height,
-                                 pcl::PointCloud<pcl::PointXYZ> &cloud) const;
+                                 pcl::PointCloud<pcl::PointXYZ> &cloud,
+                                 std::string &operation_status) const;
     
     /** @brief Capture a single point cloud and store it
      * @param[out] cloud The cloud to be filled
