@@ -468,7 +468,7 @@ bool pcl::EnsensoGrabber::getPointCloudFromImage(
         cloud.width = cloud_width;
         cloud.height = cloud_height;
         cloud.is_dense = false;
-        // Copy data in point cloud (and convert milimeters in meters)
+        // Copy data in point cloud (and convert millimeters to meters)
         for (size_t i = 0; i < pointMap.size (); i += 3)
         {
           cloud.points[i / 3].x = pointMap[i] / 1000.0;

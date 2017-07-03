@@ -58,7 +58,6 @@ void EnsensoPostprocess::processImages(
   const sensor_msgs::ImageConstPtr &right_image)
 {
   pcl::PointCloud<pcl::PointXYZ> cloud;
-  pcl_conversions::toPCL(left_image->header, cloud.header);
   bool success;
   std::string operation_status;
   success = ensenso_ptr_->getPointCloudFromImage(
@@ -70,7 +69,10 @@ void EnsensoPostprocess::processImages(
     operation_status);
   if (success)
   {
-    cloud_pub_.publish(cloud);
+    sensor_msgs::PointCloud2 ros_cloud;
+    pcl::toROSMsg(cloud, ros_cloud);
+    ros_cloud.header = left_image->header;
+    cloud_pub_.publish(ros_cloud);
   }
 
   ROS_ERROR_COND(!success, "Failed to generate point cloud because: %s",
