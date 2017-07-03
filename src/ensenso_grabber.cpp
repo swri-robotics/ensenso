@@ -411,8 +411,8 @@ int pcl::EnsensoGrabber::getPatternCount () const
 }
 
 bool pcl::EnsensoGrabber::getPointCloudFromImage(
-  const std::vector<float> &left_image,
-  const std::vector<float> &right_image,
+  const std::vector<unsigned char> &left_image,
+  const std::vector<unsigned char> &right_image,
   pcl::PointCloud<pcl::PointXYZ> &cloud) const
 {
   if (!device_open_)

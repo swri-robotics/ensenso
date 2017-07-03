@@ -47,7 +47,10 @@ void EnsensoPostprocess::processImages(
   const sensor_msgs::ImageConstPtr &left_image,
   const sensor_msgs::ImageConstPtr &right_image)
 {
-
+  pcl::PointCloud<pcl::PointXYZ> cloud;
+  pcl_conversions::toPCL(left_image->header, cloud.header);
+  ensenso_ptr_->getPointCloudFromImage(left_image->data, right_image->data, cloud);
+  cloud_pub_.publish(cloud);
 }
 
 
