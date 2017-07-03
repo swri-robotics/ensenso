@@ -427,8 +427,8 @@ bool pcl::EnsensoGrabber::getPointCloudFromImage(
 
   try
   {
-    camera_[itmImages][itmRectified][itmLeft].setBinaryData(left_image);
-    camera_[itmImages][itmRectified][itmRight].setBinaryData(right_image);
+    camera_[itmImages][itmRaw][itmLeft].setBinaryData(left_image);
+    camera_[itmImages][itmRaw][itmRight].setBinaryData(right_image);
     // Do the stereo matching
     NxLibCommand(cmdComputeDisparityMap).execute();
     NxLibCommand(cmdComputePointMap).execute();
