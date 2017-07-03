@@ -7,13 +7,14 @@ find_package(catkin REQUIRED COMPONENTS
   cv_bridge
   eigen_conversions
   geometry_msgs
+  image_transport
+  message_filters
   message_generation
   pcl_conversions
   pcl_ros
   std_msgs
   std_srvs
   tf_conversions
-  image_transport
 )
 
 find_package(Boost REQUIRED COMPONENTS system filesystem thread)
@@ -54,6 +55,7 @@ catkin_package(
     camera_info_manager
     cv_bridge
     eigen_conversions
+    message_filters
     message_runtime
     geometry_msgs
     std_msgs

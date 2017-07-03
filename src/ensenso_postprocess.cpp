@@ -8,14 +8,19 @@ EnsensoPostprocess::EnsensoPostprocess()
   std::string serial("150534");
   priv_nh.param("serial", serial, serial);
 
-  ensenso_ptr_.reset(new pcl::EnsensoGrabber);
-  ensenso_ptr_->openDevice(serial);
-  ensenso_ptr_->openTcpPort();
-  ensenso_ptr_->storeCalibrationPattern(false);
-  configureCamera();
-  ensenso_ptr_->start();
+  configureCamera(serial);
 
   cloud_pub_ = nh.advertise<sensor_msgs::PointCloud2>("depth/points", 1, false);
+
+  image_sync_.reset(new ImageSync(SyncPolicy(10), left_image_sub_, right_image_sub_));
+  image_sync_->registerCallback(boost::bind(
+    &EnsensoPostprocess::processImages,
+    this,
+    _1,
+    _2));
+
+  left_image_sub_.subscribe(nh, "left_camera_image", 2);
+  right_image_sub_.subscribe(nh, "right_camera_image", 2);
 }
 
 EnsensoPostprocess::~EnsensoPostprocess()
@@ -24,14 +29,24 @@ EnsensoPostprocess::~EnsensoPostprocess()
   ensenso_ptr_->closeDevice();
 }
 
-void EnsensoPostprocess::configureCamera()
+void EnsensoPostprocess::configureCamera(const std::string &camera_id)
 {
+  ensenso_ptr_.reset(new pcl::EnsensoGrabber);
+  ensenso_ptr_->openDevice(camera_id);
+  ensenso_ptr_->openTcpPort();
+  ensenso_ptr_->storeCalibrationPattern(false);
   if (ensenso_ptr_->isRunning())
   {
     ensenso_ptr_->stop();
   }
 
   ensenso_ptr_->start();
+}
+
+void EnsensoPostprocess::processImages(
+  const sensor_msgs::ImageConstPtr &left_image,
+  const sensor_msgs::ImageConstPtr &right_image)
+{
 
 }
 
