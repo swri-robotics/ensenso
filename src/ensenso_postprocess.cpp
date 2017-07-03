@@ -76,7 +76,7 @@ void EnsensoPostprocess::processImages(
     cloud);
   if (success)
   {
-  cloud_pub_.publish(cloud);
+    cloud_pub_.publish(cloud);
   }
 
   ROS_ERROR_COND(!success, "Failed to generate point cloud");
