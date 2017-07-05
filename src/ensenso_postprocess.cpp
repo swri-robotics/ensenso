@@ -58,6 +58,8 @@ void EnsensoPostprocess::configureCamera(const std::string &camera_id)
   }
 
   ensenso_ptr_->start();
+  ensenso_ptr_->setBinning(1);
+  ensenso_ptr_->setFlexView(false, 2);
   ensenso_ptr_->setMinimumDisparity(-117);
   ensenso_ptr_->setNumberOfDisparities(170);
   ensenso_ptr_->setOptimizationProfile(std::string("AlignedAndDiagonal"));
@@ -155,6 +157,35 @@ void EnsensoPostprocess::cameraParametersCallback(ensenso::CameraParametersConfi
       profile = "AlignedAndDiagonal";
       break;
   }
+
+  std::string trigger_mode;
+  switch (config.groups.capture.TriggerMode)
+  {
+    case 0:
+      trigger_mode = "Software";
+      break;
+
+    case 1:
+      trigger_mode = "FallingEdge";
+      break;
+
+    case 2:
+      trigger_mode = "RisingEdge";
+      break;
+
+    default:
+      trigger_mode = "Software";
+      break;
+  }
+
+  ensenso_ptr_->setUseDisparityMapAreaOfInterest(config.groups.capture.DisparityMapAOI);
+  // Flexview and binning only work in 'Software' trigger mode and with the projector on
+  if (trigger_mode.compare("Software") == 0 && config.groups.capture.Projector)
+  {
+    ensenso_ptr_->setBinning(config.groups.capture.Binning);
+    ensenso_ptr_->setFlexView(config.groups.capture.FlexView, config.groups.capture.FlexViewImages);
+  }
+
   // Stereo parameters
   ensenso_ptr_->setMinimumDisparity(config.groups.stereo.MinimumDisparity);
   ensenso_ptr_->setNumberOfDisparities(config.groups.stereo.NumberOfDisparities);
