@@ -1,26 +1,35 @@
 #include <ensenso/ensenso_postprocess.h>
+#include <cv_bridge/cv_bridge.h>
 
 EnsensoPostprocess::EnsensoPostprocess()
 {
   ros::NodeHandle nh("");
   ros::NodeHandle priv_nh("~");
+  image_transport::ImageTransport it(nh);
 
   std::string serial("150534");
   priv_nh.param("serial", serial, serial);
 
   configureCamera(serial);
 
+  left_rectified_pub_ = it.advertiseCamera("postprocessed_left/image_rect", 1);
+  right_rectified_pub_ = it.advertiseCamera("postprocessed_right/image_rect", 1);
+  disparity_pub_ = nh.advertise<stereo_msgs::DisparityImage>("disparity", 1, false);
   cloud_pub_ = nh.advertise<sensor_msgs::PointCloud2>("depth/points", 1, false);
 
-  image_sync_.reset(new ImageSync(SyncPolicy(10), left_image_sub_, right_image_sub_));
+  image_sync_.reset(new ImageSync(SyncPolicy(10), left_image_sub_, right_image_sub_, left_info_sub_, right_info_sub_));
   image_sync_->registerCallback(boost::bind(
     &EnsensoPostprocess::processImages,
     this,
     _1,
-    _2));
+    _2,
+    _3,
+    _4));
 
   left_image_sub_.subscribe(nh, "/camera/left/image_raw", 2);
   right_image_sub_.subscribe(nh, "/camera/right/image_raw", 2);
+  left_info_sub_.subscribe(nh, "/camera/left/camera_info", 2);
+  right_info_sub_.subscribe(nh, "/camera/right/camera_info", 2);
 
   reconfigure_server_.setCallback(boost::bind(
     &EnsensoPostprocess::cameraParametersCallback,
@@ -28,6 +37,7 @@ EnsensoPostprocess::EnsensoPostprocess()
     _1,
     _2));
 
+  ROS_ERROR("DJA: construction done");
 }
 
 EnsensoPostprocess::~EnsensoPostprocess()
@@ -62,20 +72,62 @@ void EnsensoPostprocess::configureCamera(const std::string &camera_id)
 
 void EnsensoPostprocess::processImages(
   const sensor_msgs::ImageConstPtr &left_image,
-  const sensor_msgs::ImageConstPtr &right_image)
+  const sensor_msgs::ImageConstPtr &right_image,
+  const sensor_msgs::CameraInfoConstPtr &left_info,
+  const sensor_msgs::CameraInfoConstPtr &right_info)
 {
+  ROS_ERROR("DJA: processing");
   pcl::PointCloud<pcl::PointXYZ> cloud;
   bool success;
   std::string operation_status;
+  std::pair<pcl::PCLImage, pcl::PCLImage> rect_images;
+  pcl::PCLImage disparity;
+  int min_disparity;
+  int max_disparity;
   success = ensenso_ptr_->getPointCloudFromImage(
     left_image->data,
     right_image->data,
     left_image->width,
     left_image->height,
+    rect_images,
+    disparity,
+    min_disparity,
+    max_disparity,
     cloud,
     operation_status);
   if (success)
   {
+    ROS_ERROR("DJA: process success");
+    sensor_msgs::CameraInfo info = *left_info;
+    ROS_ERROR("DJA: Left camera: %u", rect_images.first.width);
+    sensor_msgs::Image left_rect_image = *toImageMsg(
+      rect_images.first,
+      left_image->header.frame_id,
+      left_image->header.stamp);
+    left_rectified_pub_.publish(
+      left_rect_image,
+      info,
+      left_image->header.stamp);
+
+    info = *right_info;
+    right_rectified_pub_.publish(
+      *toImageMsg(rect_images.second, left_image->header.frame_id, left_image->header.stamp),
+      info,
+      left_image->header.stamp);
+    sensor_msgs::ImagePtr image;
+    stereo_msgs::DisparityImage disparity_msg;
+    disparity_msg.min_disparity = min_disparity;
+    disparity_msg.max_disparity = max_disparity;
+    short *image_array = reinterpret_cast<short *>(disparity.data.data());
+    cv::Mat image_mat(disparity.height, disparity.width, CV_16SC1, image_array);
+    std_msgs::Header header;
+    header.frame_id = left_image->header.frame_id;
+    header.stamp = ros::Time(disparity.header.stamp);
+    image_mat.convertTo(image_mat, CV_32FC1);
+    image = cv_bridge::CvImage(header, sensor_msgs::image_encodings::TYPE_32FC1, image_mat).toImageMsg();
+    disparity_msg.header = image->header;
+    disparity_msg.image = *image;
+    disparity_pub_.publish(disparity_msg);
     sensor_msgs::PointCloud2 ros_cloud;
     pcl::toROSMsg(cloud, ros_cloud);
     ros_cloud.header = left_image->header;
@@ -124,6 +176,26 @@ void EnsensoPostprocess::cameraParametersCallback(ensenso::CameraParametersConfi
   ensenso_ptr_->setFillRegionSize(config.groups.postproc.FillRegionSize);
 }
 
+
+sensor_msgs::ImagePtr EnsensoPostprocess::toImageMsg(
+  pcl::PCLImage pcl_image,
+  const std::string &frame,
+  const ros::Time &image_time)
+{
+  unsigned char *image_array = reinterpret_cast<unsigned char *>(&pcl_image.data[0]);
+  int type(CV_8UC1);
+  std::string encoding("mono8");
+  if (pcl_image.encoding == "CV_8UC3")
+  {
+    type = CV_8UC3;
+    encoding = "bgr8";
+  }
+  cv::Mat image_mat(pcl_image.height, pcl_image.width, type, image_array);
+  std_msgs::Header header;
+  header.frame_id = frame;
+  header.stamp = image_time;
+  return cv_bridge::CvImage(header, encoding, image_mat).toImageMsg();
+}
 
 int main(int argc, char **argv)
   {

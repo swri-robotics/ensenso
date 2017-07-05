@@ -411,12 +411,16 @@ int pcl::EnsensoGrabber::getPatternCount () const
 }
 
 bool pcl::EnsensoGrabber::getPointCloudFromImage(
-  const std::vector<pcl::uint8_t> &left_image,
-  const std::vector<pcl::uint8_t> &right_image,
+  const std::vector<pcl::uint8_t>& left_image,
+  const std::vector<pcl::uint8_t>& right_image,
   const int width,
   const int height,
-  pcl::PointCloud<pcl::PointXYZ> &cloud,
-  std::string &operation_status) const
+  PairOfImages& rect_images,
+  pcl::PCLImage& disparity,
+  int& min_disparity,
+  int& max_disparity,
+  pcl::PointCloud<pcl::PointXYZ>& cloud,
+  std::string& operation_status) const
 {
   bool ret_val = false;
   if (!device_open_)
@@ -424,15 +428,17 @@ bool pcl::EnsensoGrabber::getPointCloudFromImage(
     operation_status = "Device not open";
     return false;
   }
-
+  PCL_ERROR("DJA: Inside call %d, %d\n", width, height);
   int return_code;
   std::vector<pcl::uint8_t> left_image_resized = left_image;
   std::vector<pcl::uint8_t> right_image_resized = right_image;
-  left_image_resized.resize(width * height * sizeof(float));
-  right_image_resized.resize(width * height * sizeof(float));
+  left_image_resized.resize(width * height * sizeof(uint8_t));
+  right_image_resized.resize(width * height * sizeof(uint8_t));
+  PCL_ERROR("DJA: %s, %u\n", __FILE__, __LINE__);
 
   try
   {
+    PCL_ERROR("DJA: %s, %u\n", __FILE__, __LINE__);
     camera_[itmImages][itmRaw][itmLeft].setBinaryData(
       &return_code,
       left_image_resized,
@@ -443,6 +449,7 @@ bool pcl::EnsensoGrabber::getPointCloudFromImage(
     operation_status = std::string(nxLibTranslateReturnCode(return_code));
     if (return_code == NxLibOperationSucceeded)
     {
+      PCL_ERROR("DJA: %s, %u\n", __FILE__, __LINE__);
       camera_[itmImages][itmRaw][itmRight].setBinaryData(
         &return_code,
         right_image_resized,
@@ -451,26 +458,95 @@ bool pcl::EnsensoGrabber::getPointCloudFromImage(
         1,
         false);
       operation_status = std::string(nxLibTranslateReturnCode(return_code));
+      PCL_ERROR("DJA: %s, %u\n", __FILE__, __LINE__);
       if (return_code == NxLibOperationSucceeded)
       {
+        PCL_ERROR("DJA: %s, %u\n", __FILE__, __LINE__);
         // Do the stereo matching
-        NxLibCommand(cmdComputeDisparityMap).execute();
-        NxLibCommand(cmdComputePointMap).execute();
+        NxLibCommand(cmdRectifyImages).execute();
         std::vector<float> pointMap;
-        int cloud_width;
-        int cloud_height;
+        int computed_width;
+        int computed_height;
+        int channels;
+        int bpe;
+        bool isFloat;
+
+        PCL_ERROR("DJA: %s, %u\n", __FILE__, __LINE__);
+        camera_[itmImages][itmRectified][itmLeft].getBinaryDataInfo(
+          &computed_width,
+          &computed_height,
+          &channels,
+          &bpe,
+          &isFloat,
+          0);
+        PCL_ERROR("DJA: %s, %u, %d, %d\n", __FILE__, __LINE__, computed_width, computed_height);
+        rect_images.first.data.resize(computed_width * computed_height * sizeof(float));
+        PCL_ERROR("DJA: %s, %u\n", __FILE__, __LINE__);
+        rect_images.second.data.resize(computed_width * computed_height * sizeof(float));
+        PCL_ERROR("DJA: %s, %u\n", __FILE__, __LINE__);
+        camera_[itmImages][itmRectified][itmLeft].getBinaryData(
+          rect_images.first.data.data(),
+          rect_images.first.data.size(),
+          0,
+          0);
+        PCL_ERROR("DJA: %s, %u\n", __FILE__, __LINE__);
+        camera_[itmImages][itmRectified][itmRight].getBinaryData(
+          rect_images.second.data.data(),
+          rect_images.second.data.size(),
+          0,
+          0);
+        PCL_ERROR("DJA: %s, %u\n", __FILE__, __LINE__);
+        rect_images.first.encoding = getOpenCVType(channels, bpe, isFloat);
+        rect_images.second.encoding = rect_images.first.encoding;
+        rect_images.first.width = computed_width;
+        rect_images.second.width = rect_images.first.width;
+        rect_images.first.height = computed_height;
+        rect_images.second.height = rect_images.first.height;
+        PCL_ERROR("DJA: %s, %u\n", __FILE__, __LINE__);
+
+        NxLibCommand(cmdComputeDisparityMap).execute();
+        PCL_ERROR("DJA: %s, %u\n", __FILE__, __LINE__);
+        NxLibItem dispMap = camera_[itmImages][itmDisparityMap];
+        PCL_ERROR("DJA: %s, %u\n", __FILE__, __LINE__);
+        min_disparity = camera_[itmParameters][itmDisparityMap][itmStereoMatching][itmScaledMinimumDisparity].asInt();
+        PCL_ERROR("DJA: %s, %u\n", __FILE__, __LINE__);
+        max_disparity = min_disparity;
+        PCL_ERROR("DJA: %s, %u\n", __FILE__, __LINE__);
+        max_disparity += camera_[itmParameters][itmDisparityMap][itmStereoMatching][itmNumberOfDisparities].asInt();
+        PCL_ERROR("DJA: %s, %u\n", __FILE__, __LINE__);
+        max_disparity -= 1;
+        PCL_ERROR("DJA: %s, %u\n", __FILE__, __LINE__);
+        dispMap.getBinaryDataInfo (&computed_width, &computed_height, 0, 0, 0, 0);
+        PCL_ERROR("DJA: %s, %u, %u, %u\n", __FILE__, __LINE__, computed_width, computed_height);
+        computed_width = 128;
+        computed_height = 103;
+        disparity.width = static_cast<pcl::uint32_t>(computed_width);
+        PCL_ERROR("DJA: %s, %u\n", __FILE__, __LINE__);
+        disparity.height = static_cast<pcl::uint32_t>(computed_height);
+        PCL_ERROR("DJA: %s, %u\n", __FILE__, __LINE__);
+        disparity.data.resize(computed_width * computed_height * sizeof(short));
+        PCL_ERROR("DJA: %s, %u\n", __FILE__, __LINE__);
+        disparity.encoding = "CV_16SC1";
+        PCL_ERROR("DJA: %s, %u\n", __FILE__, __LINE__);
+        dispMap.getBinaryData(disparity.data.data(), width * height * sizeof(short), 0, 0);
+        PCL_ERROR("DJA: %s, %u\n", __FILE__, __LINE__);
+
+        NxLibCommand(cmdComputePointMap).execute();
+        PCL_ERROR("DJA: %s, %u\n", __FILE__, __LINE__);
         camera_[itmImages][itmPointMap].getBinaryDataInfo(
-          &cloud_width,
-          &cloud_height,
+          &computed_width,
+          &computed_height,
           0,
           0,
           0,
           0);
+        PCL_ERROR("DJA: %s, %u\n", __FILE__, __LINE__);
         camera_[itmImages][itmPointMap].getBinaryData (pointMap, 0);
+        PCL_ERROR("DJA: %s, %u\n", __FILE__, __LINE__);
         // Copy point cloud and convert in meters
-        cloud.resize (cloud_height * cloud_width);
-        cloud.width = cloud_width;
-        cloud.height = cloud_height;
+        cloud.resize (computed_height * computed_width);
+        cloud.width = computed_width;
+        cloud.height = computed_height;
         cloud.is_dense = false;
         // Copy data in point cloud (and convert millimeters to meters)
         for (size_t i = 0; i < pointMap.size (); i += 3)
