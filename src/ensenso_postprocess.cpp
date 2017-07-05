@@ -97,20 +97,22 @@ void EnsensoPostprocess::processImages(
     operation_status);
   if (success)
   {
-    sensor_msgs::CameraInfo info = *left_info;
+    sensor_msgs::CameraInfo left_rect_info;
+    sensor_msgs::CameraInfo right_rect_info;
+    ensenso_ptr_->getCameraInfoRectified("Left", left_rect_info);
+    ensenso_ptr_->getCameraInfoRectified("Right", right_rect_info);
     sensor_msgs::Image left_rect_image = *toImageMsg(
       rect_images.first,
       left_image->header.frame_id,
       left_image->header.stamp);
     left_rectified_pub_.publish(
       left_rect_image,
-      info,
+      left_rect_info,
       left_image->header.stamp);
 
-    info = *right_info;
     right_rectified_pub_.publish(
       *toImageMsg(rect_images.second, left_image->header.frame_id, left_image->header.stamp),
-      info,
+      right_rect_info,
       left_image->header.stamp);
     sensor_msgs::ImagePtr image;
     stereo_msgs::DisparityImage disparity_msg;

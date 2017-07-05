@@ -340,6 +340,30 @@ bool pcl::EnsensoGrabber::getCameraInfo(std::string cam, sensor_msgs::CameraInfo
   }
 }
 
+bool pcl::EnsensoGrabber::getCameraInfoRectified(std::string cam, sensor_msgs::CameraInfo &cam_info) const
+{
+  bool ret_val = false;
+  ret_val = getCameraInfo(cam, cam_info);
+
+  if (ret_val)
+  {
+    try
+    {
+      int return_code;
+      int bin_factor = camera_[itmParameters][itmCapture][itmBinning].asInt();
+      cam_info.binning_x = static_cast<uint32_t>(bin_factor);
+      cam_info.binning_y = cam_info.binning_x;
+      ret_val = true;
+    }
+    catch (NxLibException &ex)
+    {
+      ensensoExceptionHandling (ex, "getCameraInfoRectified");
+    }
+  }
+
+  return ret_val;
+}
+
 bool pcl::EnsensoGrabber::getLastCalibrationPattern ( std::vector<int> &grid_size, double &grid_spacing,
                                                       std::vector<Eigen::Vector2d> &left_points,
                                                       std::vector<Eigen::Vector2d> &right_points,
