@@ -426,12 +426,16 @@ bool pcl::EnsensoGrabber::getPointCloudFromImage(
   }
 
   int return_code;
+  std::vector<pcl::uint8_t> left_image_resized = left_image;
+  std::vector<pcl::uint8_t> right_image_resized = right_image;
+  left_image_resized.resize(width * height * sizeof(float));
+  right_image_resized.resize(width * height * sizeof(float));
 
   try
   {
     camera_[itmImages][itmRaw][itmLeft].setBinaryData(
       &return_code,
-      left_image,
+      left_image_resized,
       width,
       height,
       1,
@@ -441,7 +445,7 @@ bool pcl::EnsensoGrabber::getPointCloudFromImage(
     {
       camera_[itmImages][itmRaw][itmRight].setBinaryData(
         &return_code,
-        right_image,
+        right_image_resized,
         width,
         height,
         1,
