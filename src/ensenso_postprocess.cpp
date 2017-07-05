@@ -84,7 +84,7 @@ void EnsensoPostprocess::processImages(
   pcl::PCLImage disparity;
   int min_disparity;
   int max_disparity;
-  success = ensenso_ptr_->getPointCloudFromImage(
+  success = ensenso_ptr_->postProcessImages(
     left_image->data,
     right_image->data,
     left_image->width,
@@ -111,7 +111,9 @@ void EnsensoPostprocess::processImages(
       left_image->header.stamp);
 
     right_rectified_pub_.publish(
-      *toImageMsg(rect_images.second, left_image->header.frame_id, left_image->header.stamp),
+      *toImageMsg(rect_images.second,
+        left_image->header.frame_id,
+        left_image->header.stamp),
       right_rect_info,
       left_image->header.stamp);
     sensor_msgs::ImagePtr image;
@@ -124,7 +126,9 @@ void EnsensoPostprocess::processImages(
     header.frame_id = left_image->header.frame_id;
     header.stamp = ros::Time(disparity.header.stamp);
     image_mat.convertTo(image_mat, CV_32FC1);
-    image = cv_bridge::CvImage(header, sensor_msgs::image_encodings::TYPE_32FC1, image_mat).toImageMsg();
+    image = cv_bridge::CvImage(
+      header, sensor_msgs::image_encodings::TYPE_32FC1,
+      image_mat).toImageMsg();
     disparity_msg.header = image->header;
     disparity_msg.image = *image;
     disparity_pub_.publish(disparity_msg);
