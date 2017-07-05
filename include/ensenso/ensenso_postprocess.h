@@ -1,4 +1,6 @@
 #include <ros/ros.h>
+#include <dynamic_reconfigure/server.h>
+#include <ensenso/CameraParametersConfig.h>
 #include <ensenso/ensenso_grabber.h>
 #include <image_transport/image_transport.h>
 #include <message_filters/subscriber.h>
@@ -28,4 +30,7 @@ class EnsensoPostprocess
     void processImages(
       const sensor_msgs::ImageConstPtr &left_image,
       const sensor_msgs::ImageConstPtr &right_image);
+
+    dynamic_reconfigure::Server<ensenso::CameraParametersConfig> reconfigure_server_;
+    void cameraParametersCallback(ensenso::CameraParametersConfig &config, uint32_t level);
 };

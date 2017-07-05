@@ -21,6 +21,13 @@ EnsensoPostprocess::EnsensoPostprocess()
 
   left_image_sub_.subscribe(nh, "/camera/left/image_raw", 2);
   right_image_sub_.subscribe(nh, "/camera/right/image_raw", 2);
+
+  reconfigure_server_.setCallback(boost::bind(
+    &EnsensoPostprocess::cameraParametersCallback,
+    this,
+    _1,
+    _2));
+
 }
 
 EnsensoPostprocess::~EnsensoPostprocess()
@@ -77,6 +84,44 @@ void EnsensoPostprocess::processImages(
 
   ROS_ERROR_COND(!success, "Failed to generate point cloud because: %s",
     operation_status.c_str());
+}
+
+void EnsensoPostprocess::cameraParametersCallback(ensenso::CameraParametersConfig &config, uint32_t level)
+{
+  std::string profile;
+  switch (config.groups.stereo.OptimizationProfile)
+  {
+    case 0:
+      profile = "Aligned";
+      break;
+
+    case 1:
+      profile = "Diagonal";
+      break;
+
+    case 2:
+      profile = "AlignedAndDiagonal";
+      break;
+
+    default:
+      profile = "AlignedAndDiagonal";
+      break;
+  }
+  // Stereo parameters
+  ensenso_ptr_->setMinimumDisparity(config.groups.stereo.MinimumDisparity);
+  ensenso_ptr_->setNumberOfDisparities(config.groups.stereo.NumberOfDisparities);
+  ensenso_ptr_->setOptimizationProfile(profile);
+  ensenso_ptr_->setScaling(config.groups.stereo.Scaling);
+  ensenso_ptr_->setDepthChangeCost(config.groups.stereo.DepthChangeCost);
+  ensenso_ptr_->setDepthStepCost(config.groups.stereo.DepthStepCost);
+  ensenso_ptr_->setShadowingThreshold(config.groups.stereo.ShadowingThreshold);
+  //Postprocessing parameters
+  ensenso_ptr_->setUniquenessRatio(config.groups.postproc.UniquenessRatio);
+  ensenso_ptr_->setMedianFilterRadius(config.groups.postproc.MedianFilterRadius);
+  ensenso_ptr_->setSpeckleComponentThreshold(config.groups.postproc.SpeckleComponentThreshold);
+  ensenso_ptr_->setSpeckleRegionSize(config.groups.postproc.SpeckleRegionSize);
+  ensenso_ptr_->setFillBorderSpread(config.groups.postproc.FillBorderSpread);
+  ensenso_ptr_->setFillRegionSize(config.groups.postproc.FillRegionSize);
 }
 
 
