@@ -37,7 +37,6 @@ EnsensoPostprocess::EnsensoPostprocess()
     _1,
     _2));
 
-  ROS_ERROR("DJA: construction done");
 }
 
 EnsensoPostprocess::~EnsensoPostprocess()
@@ -76,7 +75,6 @@ void EnsensoPostprocess::processImages(
   const sensor_msgs::CameraInfoConstPtr &left_info,
   const sensor_msgs::CameraInfoConstPtr &right_info)
 {
-  ROS_ERROR("DJA: processing");
   pcl::PointCloud<pcl::PointXYZ> cloud;
   bool success;
   std::string operation_status;
@@ -97,9 +95,7 @@ void EnsensoPostprocess::processImages(
     operation_status);
   if (success)
   {
-    ROS_ERROR("DJA: process success");
     sensor_msgs::CameraInfo info = *left_info;
-    ROS_ERROR("DJA: Left camera: %u", rect_images.first.width);
     sensor_msgs::Image left_rect_image = *toImageMsg(
       rect_images.first,
       left_image->header.frame_id,
