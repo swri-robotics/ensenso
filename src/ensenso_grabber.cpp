@@ -340,6 +340,30 @@ bool pcl::EnsensoGrabber::getCameraInfo(std::string cam, sensor_msgs::CameraInfo
   }
 }
 
+bool pcl::EnsensoGrabber::getCameraInfoRectified(std::string cam, sensor_msgs::CameraInfo &cam_info) const
+{
+  bool ret_val = false;
+  ret_val = getCameraInfo(cam, cam_info);
+
+  if (ret_val)
+  {
+    try
+    {
+      int return_code;
+      int bin_factor = camera_[itmParameters][itmCapture][itmBinning].asInt();
+      cam_info.binning_x = static_cast<uint32_t>(bin_factor);
+      cam_info.binning_y = cam_info.binning_x;
+      ret_val = true;
+    }
+    catch (NxLibException &ex)
+    {
+      ensensoExceptionHandling (ex, "getCameraInfoRectified");
+    }
+  }
+
+  return ret_val;
+}
+
 bool pcl::EnsensoGrabber::getLastCalibrationPattern ( std::vector<int> &grid_size, double &grid_spacing,
                                                       std::vector<Eigen::Vector2d> &left_points,
                                                       std::vector<Eigen::Vector2d> &right_points,
@@ -572,6 +596,132 @@ bool pcl::EnsensoGrabber::openTcpPort (const int port)
     return (false);
   }
   return (true);
+}
+
+bool pcl::EnsensoGrabber::postProcessImages(
+  const std::vector<pcl::uint8_t>& left_image,
+  const std::vector<pcl::uint8_t>& right_image,
+  const int width,
+  const int height,
+  PairOfImages& rect_images,
+  pcl::PCLImage& disparity,
+  int& min_disparity,
+  int& max_disparity,
+  pcl::PointCloud<pcl::PointXYZ>& cloud,
+  std::string& operation_status) const
+{
+  bool ret_val = false;
+  if (!device_open_)
+  {
+    operation_status = "Device not open";
+    return false;
+  }
+  int return_code;
+  std::vector<pcl::uint8_t> left_image_resized = left_image;
+  std::vector<pcl::uint8_t> right_image_resized = right_image;
+  left_image_resized.resize(width * height * sizeof(uint8_t));
+  right_image_resized.resize(width * height * sizeof(uint8_t));
+
+  try
+  {
+    camera_[itmImages][itmRaw][itmLeft].setBinaryData(
+      &return_code,
+      left_image_resized,
+      width,
+      height,
+      1,
+      false);
+    operation_status = std::string(nxLibTranslateReturnCode(return_code));
+    if (return_code == NxLibOperationSucceeded)
+    {
+      camera_[itmImages][itmRaw][itmRight].setBinaryData(
+        &return_code,
+        right_image_resized,
+        width,
+        height,
+        1,
+        false);
+      operation_status = std::string(nxLibTranslateReturnCode(return_code));
+      if (return_code == NxLibOperationSucceeded)
+      {
+        // Do the stereo matching
+        NxLibCommand(cmdRectifyImages).execute();
+        std::vector<float> pointMap;
+        int computed_width;
+        int computed_height;
+        int channels;
+        int bpe;
+        bool isFloat;
+
+        camera_[itmImages][itmRectified][itmLeft].getBinaryDataInfo(
+          &computed_width,
+          &computed_height,
+          &channels,
+          &bpe,
+          &isFloat,
+          0);
+        rect_images.first.data.resize(computed_width * computed_height * sizeof(float));
+        rect_images.second.data.resize(computed_width * computed_height * sizeof(float));
+        camera_[itmImages][itmRectified][itmLeft].getBinaryData(
+          rect_images.first.data.data(),
+          rect_images.first.data.size(),
+          0,
+          0);
+        camera_[itmImages][itmRectified][itmRight].getBinaryData(
+          rect_images.second.data.data(),
+          rect_images.second.data.size(),
+          0,
+          0);
+        rect_images.first.encoding = getOpenCVType(channels, bpe, isFloat);
+        rect_images.second.encoding = rect_images.first.encoding;
+        rect_images.first.width = computed_width;
+        rect_images.second.width = rect_images.first.width;
+        rect_images.first.height = computed_height;
+        rect_images.second.height = rect_images.first.height;
+
+        NxLibCommand(cmdComputeDisparityMap).execute();
+        NxLibItem dispMap = camera_[itmImages][itmDisparityMap];
+        min_disparity = camera_[itmParameters][itmDisparityMap][itmStereoMatching][itmScaledMinimumDisparity].asInt();
+        max_disparity = min_disparity;
+        max_disparity += camera_[itmParameters][itmDisparityMap][itmStereoMatching][itmNumberOfDisparities].asInt();
+        max_disparity -= 1;
+        dispMap.getBinaryDataInfo (&computed_width, &computed_height, 0, 0, 0, 0);
+        disparity.width = static_cast<pcl::uint32_t>(computed_width);
+        disparity.height = static_cast<pcl::uint32_t>(computed_height);
+        disparity.data.resize(computed_width * computed_height * sizeof(short));
+        disparity.encoding = "CV_16SC1";
+        dispMap.getBinaryData(disparity.data.data(), width * height * sizeof(short), 0, 0);
+
+        NxLibCommand(cmdComputePointMap).execute();
+        camera_[itmImages][itmPointMap].getBinaryDataInfo(
+          &computed_width,
+          &computed_height,
+          0,
+          0,
+          0,
+          0);
+        camera_[itmImages][itmPointMap].getBinaryData (pointMap, 0);
+        // Copy point cloud and convert in meters
+        cloud.resize (computed_height * computed_width);
+        cloud.width = computed_width;
+        cloud.height = computed_height;
+        cloud.is_dense = false;
+        // Copy data in point cloud (and convert millimeters to meters)
+        for (size_t i = 0; i < pointMap.size (); i += 3)
+        {
+          cloud.points[i / 3].x = pointMap[i] / 1000.0;
+          cloud.points[i / 3].y = pointMap[i + 1] / 1000.0;
+          cloud.points[i / 3].z = pointMap[i + 2] / 1000.0;
+        }
+        ret_val = true;
+      }
+    }
+  }
+  catch (NxLibException &ex)
+  {
+    ensensoExceptionHandling (ex, "getPointCloudFromImage");
+  }
+  return ret_val;
 }
 
 void pcl::EnsensoGrabber::processGrabbing ()

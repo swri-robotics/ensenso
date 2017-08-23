@@ -157,7 +157,15 @@ public:
      * @note See: [sensor_msgs/CameraInfo](http://docs.ros.org/api/sensor_msgs/html/msg/CameraInfo.html)
      */
     bool getCameraInfo(std::string cam, sensor_msgs::CameraInfo &cam_info) const;
-    
+
+    /** @brief Get meta information about rectified images
+     * @param[in] cam A string containing the camera (Left or Right)
+     * @param[out] cam_info meta information for a camera.
+     * @return True if successful, false otherwise
+     * @note See: [sensor_msgs/CameraInfo](http://docs.ros.org/api/sensor_msgs/html/msg/CameraInfo.html)
+     */
+    bool getCameraInfoRectified(std::string cam, sensor_msgs::CameraInfo &cam_info) const;
+
     /** @brief Get the raw stereo pattern information and the pattern pose. Before using it enable the
      * storeCalibrationPattern.
      * @param[out] grid_size The number of points on the patterns grid as two element vector.
@@ -203,6 +211,30 @@ public:
      * @return True if successful, false otherwise */
     bool openTcpPort (const int port = 24000);
     
+    /** @brief Postprocesses images to reconstruct the point cloud, rectified
+     * images, and disparity information.
+     * @param[in] left_image The raw left image as a 1D vector of pixel values
+     * @param[in] right_image The raw right image as a 1D vector of pixel values
+     * @param[in] width Image width
+     * @param[in] height Image height
+     * @param[out] rect_images Rectified images
+     * @param[out] disparity Camera disparity
+     * @param[out] min_disparity Minimum image disparity, in pixels
+     * @param[out] max_disparity Maximum image disparity, in pixels
+     * @param[out] cloud The cloud to be filled
+     * @param[out] operation_status Description of operation outcome
+     * @return True if successful, false otherwise */
+    bool postProcessImages(const std::vector<pcl::uint8_t>& left_image,
+                                 const std::vector<pcl::uint8_t>& right_image,
+                                 const int width,
+                                 const int height,
+                                 PairOfImages& rect_images,
+                                 pcl::PCLImage& disparity,
+                                 int& min_disparity,
+                                 int& max_disparity,
+                                 pcl::PointCloud<pcl::PointXYZ>& cloud,
+                                 std::string &operation_status) const;
+
     /** @brief Restores the default capture configuration parameters.
      * @return True if successful, false otherwise */
     bool restoreDefaultConfiguration () const;

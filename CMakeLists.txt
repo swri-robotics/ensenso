@@ -7,13 +7,14 @@ find_package(catkin REQUIRED COMPONENTS
   cv_bridge
   eigen_conversions
   geometry_msgs
+  image_transport
+  message_filters
   message_generation
   pcl_conversions
   pcl_ros
   std_msgs
   std_srvs
   tf_conversions
-  image_transport
 )
 
 find_package(Boost REQUIRED COMPONENTS system filesystem thread)
@@ -54,6 +55,7 @@ catkin_package(
     camera_info_manager
     cv_bridge
     eigen_conversions
+    message_filters
     message_runtime
     geometry_msgs
     std_msgs
@@ -70,11 +72,13 @@ include_directories(${ENSENSO_INCLUDE_DIRS})
 include_directories(${catkin_INCLUDE_DIRS})
 add_definitions(${PCL_DEFINITIONS})
 
-
 # Libraries
 add_library(ensenso_grabber src/ensenso_grabber.cpp)
 target_link_libraries(ensenso_grabber ${ENSENSO_LIBRARIES} ${PCL_LIBRARIES} ${catkin_LIBRARIES})
 
 add_executable(ensenso_driver src/ensenso_driver.cpp)
+add_executable(ensenso_postprocess src/ensenso_postprocess.cpp)
 add_dependencies(ensenso_driver ${catkin_EXPORTED_TARGETS})
+add_dependencies(ensenso_postprocess ${catkin_EXPORTED_TARGETS})
 target_link_libraries(ensenso_driver ensenso_grabber ${PCL_LIBRARIES} ${catkin_LIBRARIES})
+target_link_libraries(ensenso_postprocess ensenso_grabber ${PCL_LIBRARIES} ${catkin_LIBRARIES})

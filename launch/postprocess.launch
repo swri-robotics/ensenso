@@ -1,0 +1,53 @@
+<?xml version="1.0"?>
+<launch>
+
+  <arg name="serial" default="171286" />
+
+  <param name="use_sim_time" value="true" />
+  
+  <!-- Logging -->
+  <env name="ROSCONSOLE_CONFIG_FILE" value="$(find ensenso)/config/rosconsole.conf"/>
+
+  <!-- Driver configuration -->
+  <node name="driver_dynconfig" pkg="dynamic_reconfigure" type="dynparam" args="set_from_parameters ensenso_driver" ns="camera">
+    <!-- Capture parameters -->
+    <param name="AutoBlackLevel"    type="bool"   value="true" />
+    <param name="AutoExposure"      type="bool"   value="true" />
+    <param name="AutoGain"          type="bool"   value="true" />
+    <param name="Binning"           type="int"    value="1" />
+    <param name="BlackLevelOffset"  type="double" value="1.0" />
+    <param name="DisparityMapAOI"   type="bool"   value="false" />
+    <param name="Exposure"          type="double" value="1.5" />
+    <param name="FlexView"          type="bool"   value="false" />
+    <param name="FlexViewImages"    type="int"    value="2" />
+    <param name="FrontLight"        type="bool"   value="false" />
+    <param name="Gain"              type="int"    value="1" />
+    <param name="GainBoost"         type="bool"   value="true" />
+    <param name="HardwareGamma"     type="bool"   value="true" />
+    <param name="Hdr"               type="bool"   value="true" />
+    <param name="PixelClock"        type="int"    value="24" />
+    <param name="Projector"         type="bool"   value="true" />
+    <param name="TargetBrightness"  type="int"    value="80" />
+    <param name="TriggerMode"       type="int"    value="0" />      <!-- Software: 0, FallingEdge: 1, RisingEdge: 2 -->
+    <!-- Stereo parameters -->
+    <param name="MinimumDisparity"      type="int"    value="-117" />
+    <param name="NumberOfDisparities"   type="int"    value="64" />
+    <param name="OptimizationProfile"   type="int"    value="2" />  <!-- Aligned: 0, Diagonal: 1, AlignedAndDiagonal: 2 -->
+    <param name="Scaling"               type="double" value="1.0" />
+    <!-- Streaming parameters -->    
+    <param name="Cloud"   type="bool"   value="true" />
+    <param name="Images"  type="bool"   value="true" />
+  </node>
+
+  <!-- Ensenso driver -->
+  <node name="postprocessor" pkg="ensenso" type="ensenso_postprocess" ns="camera" output="screen"> 
+    <param name="serial" type="string" value="$(arg serial)" />
+  </node>
+
+  <node name="rectifier" pkg="swri_nodelet" type="nodelet" args="image_proc/rectify standalone">
+    <remap from="image_mono" to="/camera/image_raw" /> 
+  </node>
+
+  <node pkg="tf" type="static_transform_publisher" name="tf_broadcaster" args="0 0 0 0 0 0 1 map camera_optical_frame 10" />
+  
+</launch>
