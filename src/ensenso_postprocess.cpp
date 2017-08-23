@@ -69,6 +69,7 @@ void EnsensoPostprocess::configureCamera(const std::string &camera_id)
   ensenso_ptr_->setSpeckleComponentThreshold(10);
   ensenso_ptr_->setSpeckleRegionSize(30);
   ensenso_ptr_->setFillBorderSpread(1);
+  ensenso_ptr_->setProjector(true);
 }
 
 void EnsensoPostprocess::processImages(
@@ -186,11 +187,8 @@ void EnsensoPostprocess::cameraParametersCallback(ensenso::CameraParametersConfi
 
   ensenso_ptr_->setUseDisparityMapAreaOfInterest(config.groups.capture.DisparityMapAOI);
   // Flexview and binning only work in 'Software' trigger mode and with the projector on
-  if (trigger_mode.compare("Software") == 0 && config.groups.capture.Projector)
-  {
-    ensenso_ptr_->setBinning(config.groups.capture.Binning);
-    ensenso_ptr_->setFlexView(config.groups.capture.FlexView, config.groups.capture.FlexViewImages);
-  }
+  ensenso_ptr_->setBinning(1);
+  ensenso_ptr_->setFlexView(config.groups.capture.FlexView, config.groups.capture.FlexViewImages);
 
   // Stereo parameters
   ensenso_ptr_->setMinimumDisparity(config.groups.stereo.MinimumDisparity);
